@@ -1,0 +1,14 @@
+tau 1
+nu 1
+k_bar .3
+k_sol .3
+b_init .5
+soc_min 0
+soc_max 1
+min_technology   2
+min_current 0
+mu_weight  0
+mu_cost 1.0
+mu_life 0
+w_fuel  98.4
+solar_max 75
