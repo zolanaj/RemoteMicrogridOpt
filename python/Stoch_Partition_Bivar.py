@@ -1,6 +1,5 @@
 """
 Alex Zolan
-Created July 21, 2015
 CPLEX instance of EEOMC Stochastic Model
 
 The purpose of this Python module is to solve smaller instances of
@@ -148,7 +147,7 @@ def SolvePartition(inputs, scenario, start_period, end_period,
     def lambda_minus_var(bat,k,m,n,t): return "lambda_minus_"+bat.GetName() + ".K" + str(k) + ".M" + str(m) + ".N"+ str(n) + ".TT" + str(t)
     def lambda_plus_var(bat,k,m,n,t): return "lambda_plus_"+bat.GetName() + ".K" + str(k) + ".M" + str(m) + ".N"+ str(n) + ".TT" + str(t)
     def soc_start_var(bat,k): return "soc_start_"+bat.GetName() + ".K" + str(k)
-    def soc_end_var(bat,k): return "soc_end_"+bat.GetName() + ".K" + str(k)
+    def soc_end_var(bat,k): return B_minus_var(bat,k,end_period)
       
     W_names = flatten([["W_" + tech.GetName() + ".K" + str(i+1) 
             for i in range(tech_maxes[tech.GetName()])] 
@@ -352,7 +351,7 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                     ub=[cplex.infinity]*len(F_tilde_names),
                     types=[p.variables.type.continuous]*len(F_tilde_names),
                     names=F_tilde_names )
-    #B_soc_bkt -- State of charge by battery by time period
+    #B_soc_bkt -- State of charge of battery b, twin k at end of time period t
     p.variables.add(obj=scipy.zeros_like(Bhat_flat,dtype=float),
                     lb=scipy.zeros(num_Bhat,dtype=float),
                     ub=scipy.ones(num_Bhat,dtype=float),
@@ -370,24 +369,6 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                     ub=[cplex.infinity]*num_Bhat,
                     types=[p.variables.type.continuous]*num_Bhat,
                     names=flatten(I_plus_names) )
-    #V_soc_bkt -- Voltage by battery by time period
-    #p.variables.add(obj=scipy.zeros_like(Bhat_flat,dtype=float),
-    #                lb=scipy.zeros(num_Bhat,dtype=float),
-    #                ub=[cplex.infinity]*num_Bhat,
-    #                types=[p.variables.type.continuous]*num_Bhat,
-    #                names=flatten(V_soc_names) )
-    #Y_minus_bkt -- Current out by battery by time period
-#    p.variables.add(obj=scipy.zeros_like(Bhat_flat,dtype=float),
-#                    lb=scipy.zeros(num_Bhat,dtype=float),
-#                    ub=[cplex.infinity]*num_Bhat,
-#                    types=[p.variables.type.continuous]*num_Bhat,
-#                    names=flatten(Y_minus_names) )
-    #Y_plus_bkt -- Current in by battery by time period
-#    p.variables.add(obj=scipy.zeros_like(Bhat_flat,dtype=float),
-#                    lb=scipy.zeros(num_Bhat,dtype=float),
-#                    ub=[cplex.infinity]*num_Bhat,
-#                    types=[p.variables.type.continuous]*num_Bhat,
-#                    names=flatten(Y_plus_names) )
     #Z_minus_bkt -- Current out*State of charge by battery by time period
     p.variables.add(obj=scipy.array(flatten(Z_costs)),
                     lb=scipy.zeros(num_Bhat,dtype=float),
@@ -462,7 +443,7 @@ def SolvePartition(inputs, scenario, start_period, end_period,
     #minimize cost
     p.objective.set_sense( p.objective.sense.minimize )
 
-    #constraint 2a - power flow
+    #constraint 15a - power flow
     val = flatten([[tech.GetEfficiencyOut() 
             for i in range(tech_maxes[tech.GetName()])] 
             for tech in technologies 
@@ -480,10 +461,10 @@ def SolvePartition(inputs, scenario, start_period, end_period,
             for t in range(num_periods)], 
             senses=['G' for t in range(num_periods)], 
             rhs=loads, 
-            names=['Sys_Op_2a_'+str(t+start_period)
+            names=['Sys_Op_15a_'+str(t+start_period)
                 for t in range(num_periods)])
     
-    #constraint 2b - spinning reserve
+    #constraint 15b - spinning reserve
     #eta_out*p_max*Bsoc for all batteries in time t
     val = flatten([[ tech.GetEfficiencyOut()*tech.GetMaxPower()*
             tech.GetSOC()
@@ -506,10 +487,10 @@ def SolvePartition(inputs, scenario, start_period, end_period,
             for t in range(num_periods)], 
             senses=['G' for t in range(num_periods)], 
             rhs=scipy.zeros(num_periods), 
-            names=['Sys_Op_2b_'+str(t+start_period)
+            names=['Sys_Op_15b_'+str(t+start_period)
                 for t in range(num_periods)])
      
-    #constraint 2c -- break purchasing symmetry
+    #constraint 15c -- break purchasing symmetry
     for tech in technologies: 
         if tech.GetType() != "PVArray":
             for i in range(tech_maxes[tech.GetName()]-1): 
@@ -520,31 +501,10 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                     cplex.SparsePair( ind,val )],
                     senses = ['G'],
                     rhs = [0],
-                    names = ['Sys_Op_2c_'+tech.GetName()+
+                    names = ['Sys_Op_15c_'+tech.GetName()+
                             ".K"+str(i)])
-                               
-    #constraint 2d1 - lifecycles maximums - generators (relaxed if lower bound)
-#    if upper_bound:
-#        for gen in generators:
-#            val = [1.0,-1.0*prob*gen.GetMaxLife()]
-#            for k in range(tech_maxes[gen.GetName()]):
-#                p.linear_constraints.add(
-#                        lin_expr=[cplex.SparsePair([L_var(gen,k+1),
-#                                W_var(gen,k+1)],val)],
-#                        senses=['L'], 
-#                        rhs=[0], 
-#                        names=['Sys_Op_2d1_'+gen.GetName()+".K"+str(k+1)])
-#        for bat in batteries:
-#            val = [1.0,-1.0*prob*bat.GetMaxLife()]
-#            for k in range(tech_maxes[bat.GetName()]):
-#                p.linear_constraints.add(
-#                        lin_expr=[cplex.SparsePair([L_var(bat,k+1),
-#                                W_var(bat,k+1)],val)],
-#                        senses=['L'], 
-#                        rhs=[0], 
-#                        names=['Sys_Op_2d1_'+bat.GetName()+".K"+str(k+1)])
-                        
-    #constraint 3a -- Generator Max Power
+                                                      
+    #constraint 16a1 -- Generator Max Power
     for gen in generators:
         for k in range(tech_maxes[gen.GetName()]):
             p.linear_constraints.add(lin_expr=[
@@ -554,12 +514,25 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                     for t in range(num_periods)], 
             senses=['L' for t in range(num_periods)], 
             rhs=scipy.zeros(num_periods,dtype=float), 
-            names=['Gen_Op_3a1_'+gen.GetName()+".K"
+            names=['Gen_Op_16a1_'+gen.GetName()+".K"
                 +str(k+1)+".TT"+str(t+start_period)
                 for t in range(num_periods)])
     
-    #constraint 3a2, the min generator power, is skipped.
-    #constraint 3b -- Fuel Usage
+    #constraint 16a2 -- Generator Min Power
+    for gen in generators:
+        for k in range(tech_maxes[gen.GetName()]):
+            p.linear_constraints.add(lin_expr=[
+                    cplex.SparsePair([G_var(gen,k+1,t+start_period),
+                    P_minus_var(gen,k+1,(t+start_period))], 
+                    [-1*gen.GetMinPower(),1])
+                    for t in range(num_periods)], 
+            senses=['G' for t in range(num_periods)], 
+            rhs=scipy.zeros(num_periods,dtype=float), 
+            names=['Gen_Op_16a2_'+gen.GetName()+".K"
+                +str(k+1)+".TT"+str(t+start_period)
+                for t in range(num_periods)])
+                    
+    #constraint 16b -- Fuel Usage
     val = [1]
     val.extend(flatten([[gen.GetFuelUseB()/-1000.0 for i in range(tech_maxes[gen.GetName()])] 
             for gen in generators] ) )
@@ -573,10 +546,10 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                     for t in range(num_periods)], 
             senses=['G' for t in range(num_periods)], 
             rhs=scipy.zeros(num_periods,dtype=float), 
-            names=['Gen_Op_3b_'+str(t+start_period)
+            names=['Gen_Op_16b_'+str(t+start_period)
                 for t in range(num_periods)])  
                 
-    #constraint 3c -- Use only generators that are purchased
+    #constraint 16c -- Use only generators that are purchased
     for gen in generators:
         for k in range(tech_maxes[gen.GetName()]):
             p.linear_constraints.add(lin_expr=[
@@ -588,28 +561,11 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                     for t in range(num_periods)],
                     senses=['L' for t in range(num_periods)], 
                 rhs=scipy.zeros(num_periods,dtype=float), 
-                names=['Gen_Op_3c_'+gen.GetName()+".K"
+                names=['Gen_Op_16c_'+gen.GetName()+".K"
                 +str(k+1)+".TT"+str(t+start_period)
                 for t in range(num_periods)]) 
     
-    #constraint 3d -- Break generator power out symmetry
-    for gen in generators:
-        for k in range(tech_maxes[gen.GetName()]-1):
-            p.linear_constraints.add(lin_expr=[
-                    cplex.SparsePair([
-                    "P_minus_" + gen.GetName() + ".K" + str(k+1)
-                    + ".TT" + str(t+start_period),
-                    "P_minus_" + gen.GetName() 
-                    + ".K" + str(k+2) 
-                    + ".TT" + str(t+start_period)],[1,-1])
-                    for t in range(num_periods)],
-                    senses=['G' for t in range(num_periods)], 
-                rhs=scipy.zeros(num_periods,dtype=float), 
-                names=['Gen_Op_3d_'+gen.GetName()+".K"
-                +str(k+2)+".TT"+str(t+start_period)
-                for t in range(num_periods)])
-    
-    #constraint 3e -- Break generator use symmetry                                                                                                                                                      
+    #constraint 16d -- Break generator use symmetry                                                                                                                                                      
     for gen in generators:
         for k in range(tech_maxes[gen.GetName()]-1):
             p.linear_constraints.add(lin_expr=[
@@ -622,11 +578,28 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                     for t in range(num_periods)],
                     senses=['G' for t in range(num_periods)], 
                 rhs=scipy.zeros(num_periods,dtype=float), 
-                names=['Gen_Op_3d_'+gen.GetName()+".K"
+                names=['Gen_Op_16d_'+gen.GetName()+".K"
+                +str(k+2)+".TT"+str(t+start_period)
+                for t in range(num_periods)])
+                    
+    #constraint 16e -- Break generator power out symmetry
+    for gen in generators:
+        for k in range(tech_maxes[gen.GetName()]-1):
+            p.linear_constraints.add(lin_expr=[
+                    cplex.SparsePair([
+                    "P_minus_" + gen.GetName() + ".K" + str(k+1)
+                    + ".TT" + str(t+start_period),
+                    "P_minus_" + gen.GetName() 
+                    + ".K" + str(k+2) 
+                    + ".TT" + str(t+start_period)],[1,-1])
+                    for t in range(num_periods)],
+                    senses=['G' for t in range(num_periods)], 
+                rhs=scipy.zeros(num_periods,dtype=float), 
+                names=['Gen_Op_16e_'+gen.GetName()+".K"
                 +str(k+2)+".TT"+str(t+start_period)
                 for t in range(num_periods)])
     
-    #constraint 4a -- PV out limited by solar power and # purchased
+    #constraint 17a -- PV out limited by solar power and # purchased
     for pv in pv_arrays:
         p.linear_constraints.add(lin_expr=[
                 cplex.SparsePair(["P_PV_"+pv.GetName() 
@@ -636,325 +609,24 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                     for t in range(num_periods)],
                 senses=['L' for t in range(num_periods)],
                 rhs=scipy.zeros(num_periods,dtype=float), 
-                names=['PV_Op_4a_'+pv.GetName()
+                names=['PV_Op_17a_'+pv.GetName()
                     + ".TT"+str(t+start_period)
                     for t in range(num_periods)]
             )
     
-    #constraint 4b -- upper bound on purchases
+    #constraint 17b -- upper bound on PV system purchases
     for pv in pv_arrays:
         p.linear_constraints.add(lin_expr=[
                 cplex.SparsePair(["X_"+pv.GetName()],
                     [1.0])],
                 senses=['L'],
-                rhs=[75],#[float(scalars["solar_max"])], 
-                names=['PV_Op_4b_'+pv.GetName()]
+                rhs=[float(scalars["solar_max"])], 
+                names=['PV_Op_17b_'+pv.GetName()]
             )
-    #constraint 4c
-    #if min_PV > 0:
-    #    for pv in pv_arrays:
-    #        p.linear_constraints.add(lin_expr=[
-    #            cplex.SparsePair(["X_"+pv.GetName()],
-    #                [1.0])],
-    #            senses=['G'],
-    #            rhs=[min_PV],
-    #            names=['MIN_PV_'+pv.GetName()]
-    #            )
     
-    #constraint 5a, 5b are skipped
-    #constraint 5c -- State of charge for first time period
-    for bat in batteries:
-        val = [1.0,-1.0,-1.0*(
-            float(scalars["tau"])*bat.GetEfficiencyIn()
-            / bat.GetReferenceCapacity()),
-            1.0*(float(scalars["tau"]) / bat.GetReferenceCapacity())]
-        for k in range(tech_maxes[bat.GetName()]):
-            p.linear_constraints.add(lin_expr=[
-                    cplex.SparsePair([B_soc_var(bat,k+1,t),
-                                B_soc_var(bat,k+1,t-1),
-                                I_plus_var(bat,k+1,t),
-                                I_minus_var(bat,k+1,t)]
-                            ,val) for t in range(start_period,end_period+1)],
-                    senses=['E' for t in range(num_periods)],
-                    rhs=scipy.zeros(num_periods), 
-                    names=['Bat_Op_5c_'+bat.GetName()+".K"+str(k+1) +
-                ".TT"+str(t) for t in range(start_period,end_period+1)])
-    for bat in batteries:
-        #constraint 5d1 -- SOC maximum
-        val = [1,-1.0*float(scalars["soc_max"])]
-        for k in range(tech_maxes[bat.GetName()]):
-            p.linear_constraints.add(lin_expr=[
-                    cplex.SparsePair([B_soc_var(bat,k+1,t),
-                                W_var(bat,k+1)]
-                            ,val) for t in range(start_period,end_period+1)],
-                    senses=['L' for t in range(num_periods)],
-                    rhs=scipy.zeros(num_periods), 
-                    names=['Bat_Op_5d1_'+bat.GetName()+".K"+str(k+1) +
-                ".TT"+str(t) for t in range(start_period,end_period+1)])
-    #for bat in batteries:
-    #    #constraint 5d2 -- SOC minimum
-    #    val = [1,-1.0*float(scalars["soc_min"])]
-    #    for k in range(tech_maxes[bat.GetName()]):
-    #        p.linear_constraints.add(lin_expr=[
-    #                cplex.SparsePair([B_soc_var(bat,k+1,t),
-    #                            W_var(bat,k+1)]
-    #                        ,val) for t in range(start_period,end_period+1)],
-    #                senses=['G' for t in range(num_periods)],
-    #                rhs=scipy.zeros(num_periods), 
-    #                names=['Bat_Op_5d2_'+bat.GetName()+".K"+str(k+1) +
-    #            ".TT"+str(t) for t in range(start_period,end_period+1)])
-    
-    #for bat in batteries:
-    #    #constraint 5e -- SOC equal for all batteries of type b
-    #    val = [1.0,-1.0,1.0]
-    #    for k in range(tech_maxes[bat.GetName()]-1):
-    #        p.linear_constraints.add(lin_expr=[
-    #                cplex.SparsePair([B_soc_var(bat,k+1,t),
-    #                            B_soc_var(bat,k+2,t),
-    #                            W_var(bat,k+1)]
-    #                    ,val) for t in range(start_period,end_period+1)],
-    #                senses=['L' for t in range(num_periods)],
-    #                rhs=1.0*scipy.ones(num_periods), 
-    #                names=['Bat_Op_5e_'+bat.GetName()+".K"+str(k+1) +
-    #            ".TT"+str(t) for t in range(start_period,end_period+1)])
-    #for bat in batteries:
-    #    #constraint 5f -- SOC equal for all batteries of type b
-    #    val = [1.0,1.0,-1.0]
-    #    for k in range(tech_maxes[bat.GetName()]-1):
-    #        p.linear_constraints.add(lin_expr=[
-    #                cplex.SparsePair([B_soc_var(bat,k+1,t),
-    #                            B_soc_var(bat,k+2,t),
-    #                            W_var(bat,k+1)]
-    #                    ,val) for t in range(start_period,end_period+1)],
-    #                senses=['G' for t in range(num_periods)],
-    #                rhs=-1.0*scipy.ones(num_periods), 
-    #                names=['Bat_Op_5f_'+bat.GetName()+".K"+str(k+1) +
-    #            ".TT"+str(t) for t in range(start_period,end_period+1)])
-    ##constraint 5g -- Voltage function of SOC skipped (nonlinear)
-    #    
-    #for bat in batteries:
-    #    #constraint 5h1 -- power out upper limits of battery type b
-    #    val = [1.0,-1.0*bat.GetMaxPower()]
-    #    for k in range(tech_maxes[bat.GetName()]):
-    #        p.linear_constraints.add(lin_expr=[
-    #                cplex.SparsePair([P_minus_var(bat,k+1,t),
-    #                            B_minus_var(bat,k+1,t)]
-    #                    ,val) for t in range(start_period,end_period+1)],
-    #                senses=['L' for t in range(num_periods)],
-    #                rhs=scipy.zeros(num_periods), 
-    #                names=['Bat_Op_5h1_'+bat.GetName()+".K"+str(k+1) +
-    #            ".TT"+str(t) for t in range(start_period,end_period+1)])
-        
-    for bat in batteries:
-        #constraint 5h2 -- power out lower limits of battery type b
-        val = [1.0,-1.0*bat.GetMinPower()]
-        for k in range(tech_maxes[bat.GetName()]):
-            p.linear_constraints.add(lin_expr=[
-                    cplex.SparsePair([P_minus_var(bat,k+1,t),
-                                B_minus_var(bat,k+1,t)]
-                        ,val) for t in range(start_period,end_period+1)],
-                    senses=['G' for t in range(num_periods)],
-                    rhs=scipy.zeros(num_periods), 
-                    names=['Bat_Op_5h2_'+bat.GetName()+".K"+str(k+1) +
-                ".TT"+str(t) for t in range(start_period,end_period+1)])
-    for bat in batteries:
-        #constraint 5i1 -- power out upper limits of battery type b
-        val = [1.0,-1.0*bat.GetMaxPower()]
-        for k in range(tech_maxes[bat.GetName()]):
-            p.linear_constraints.add(lin_expr=[
-                    cplex.SparsePair([P_plus_var(bat,k+1,t),
-                                B_plus_var(bat,k+1,t)]
-                        ,val) for t in range(start_period,end_period+1)],
-                    senses=['L' for t in range(num_periods)],
-                    rhs=scipy.zeros(num_periods), 
-                    names=['Bat_Op_5i1_'+bat.GetName()+".K"+str(k+1) +
-                ".TT"+str(t) for t in range(start_period,end_period+1)])
-    for bat in batteries:
-        #constraint 5i2 -- power out lower limits of battery type b
-        val = [1.0,-1.0*bat.GetMinPower()]
-        for k in range(tech_maxes[bat.GetName()]):
-            p.linear_constraints.add(lin_expr=[
-                    cplex.SparsePair([P_plus_var(bat,k+1,t),
-                                B_plus_var(bat,k+1,t)]
-                        ,val) for t in range(start_period,end_period+1)],
-                    senses=['G' for t in range(num_periods)],
-                    rhs=scipy.zeros(num_periods), 
-                    names=['Bat_Op_5i2_'+bat.GetName()+".K"+str(k+1) +
-                ".TT"+str(t) for t in range(start_period,end_period+1)])
-    for bat in batteries:
-        #constraint 5j -- current limits based on SOC
-        val = [1.0,-1.0*(bat.GetReferenceCapacity()
-                / (1+bat.GetRateOut()))]
-        for k in range(tech_maxes[bat.GetName()]):
-            p.linear_constraints.add(lin_expr=[
-                    cplex.SparsePair([I_minus_var(bat,k+1,t),
-                                B_soc_var(bat,k+1,t-1)]
-                            ,val) for t in range(start_period,end_period+1)],
-                    senses=['L' for t in range(num_periods)],
-                    rhs=scipy.zeros(num_periods), 
-                    names=['Bat_Op_5j_'+bat.GetName()+".K"+str(k+1) +
-                ".TT"+str(t) for t in range(start_period,end_period+1)])
-    #for bat in batteries:
-    #    #constraint 5k2 -- lower limits on current out
-    #    val = [1.0,-1.0*bat.GetMinCurrent()]
-    #    for k in range(tech_maxes[bat.GetName()]):
-    #        p.linear_constraints.add(lin_expr=[
-    #                cplex.SparsePair([I_minus_var(bat,k+1,t),
-    #                            B_minus_var(bat,k+1,t)]
-    #                    ,val) for t in range(start_period,end_period+1)],
-    #                senses=['G' for t in range(num_periods)],
-    #                rhs=scipy.zeros(num_periods), 
-    #                names=['Bat_Op_5k2_'+bat.GetName()+".K"+str(k+1) +
-    #            ".TT"+str(t) for t in range(start_period,end_period+1)]) 
-    for bat in batteries:
-        #constraint 5k1 -- upper limits on current out
-        val = [1.0,-1.0*(bat.GetIUMinus())]
-        for k in range(tech_maxes[bat.GetName()]):
-            p.linear_constraints.add(lin_expr=[
-                    cplex.SparsePair([I_minus_var(bat,k+1,t),
-                                B_minus_var(bat,k+1,t)]
-                        ,val) for t in range(start_period,end_period+1)],
-                    senses=['L' for t in range(num_periods)],
-                    rhs=scipy.zeros(num_periods), 
-                    names=['Bat_Op_5k1_'+bat.GetName()+".K"+str(k+1) +
-                ".TT"+str(t) for t in range(start_period,end_period+1)])
-    #for bat in batteries:
-    #    #constraint 5l2 -- lower limits on current in
-    #    val = [1.0,-1.0*bat.GetMinCurrent()]
-    #    for k in range(tech_maxes[bat.GetName()]):
-    #        p.linear_constraints.add(lin_expr=[
-    #                cplex.SparsePair([I_plus_var(bat,k+1,t),
-    #                            B_plus_var(bat,k+1,t)]
-    #                    ,val) for t in range(start_period,end_period+1)],
-    #                senses=['G' for t in range(num_periods)],
-    #                rhs=scipy.zeros(num_periods), 
-    #                names=['Bat_Op_5l2_'+bat.GetName()+".K"+str(k+1) +
-    #            ".TT"+str(t) for t in range(start_period,end_period+1)]) 
-    for bat in batteries:
-        #constraint 5l1 -- upper limits on current in
-        val = [1.0,-1.0*(bat.GetIUPlus())]
-        for k in range(tech_maxes[bat.GetName()]):
-            p.linear_constraints.add(lin_expr=[
-                    cplex.SparsePair([I_plus_var(bat,k+1,t),
-                                B_plus_var(bat,k+1,t)]
-                        ,val) for t in range(start_period,end_period+1)],
-                    senses=['L' for t in range(num_periods)],
-                    rhs=scipy.zeros(num_periods), 
-                    names=['Bat_Op_5l1_'+bat.GetName()+".K"+str(k+1) +
-                ".TT"+str(t) for t in range(start_period,end_period+1)])
-    for bat in batteries:
-        #constraint 5m -- Only use batteries that you buy
-        val = [1,1,-1]
-        for k in range(tech_maxes[bat.GetName()]):
-            p.linear_constraints.add(lin_expr=[
-                    cplex.SparsePair([B_minus_var(bat,k+1,t),
-                                B_plus_var(bat,k+1,t),
-                                W_var(bat,k+1)],val) 
-                        for t in range(start_period,end_period+1)],
-                    senses=['L' for t in range(num_periods)],
-                    rhs=scipy.zeros(num_periods), 
-                    names=['Bat_Op_5m_'+bat.GetName()+".K"+str(k+1) +
-                ".TT"+str(t) for t in range(start_period,end_period+1)])
-        
-    for bat in batteries:
-        #constraint 5n -- Can't charge and discharge batteries in
-        #same time period
-        val=[1,1]
-        for batp in batteries:
-            if batp != bat:
-                for k in range(tech_maxes[bat.GetName()]):
-                    for kp in range(tech_maxes[batp.GetName()]):
-                        p.linear_constraints.add(lin_expr=[
-                            cplex.SparsePair([B_plus_var(bat,k+1,t),
-                            B_minus_var(batp,kp+1,t)],val) 
-                            for t in range(
-                                start_period,end_period+1)],
-                    senses=['L' for t in range(num_periods)],
-                    rhs=scipy.ones(num_periods,dtype=float), 
-                    names=['Bat_Op_5n_'+bat.GetName()+".K"+str(k+1) 
-                        +".BP"+batp.GetName()[-1]+
-                        ".KP"+str(kp+1)+".TT"+str(t) 
-                        for t in range(start_period,end_period+1)])
-    for bat in batteries:
-        #constraint INIT_COND_2a -- SOC at start of time period
-        val = [1,-1.0,1.0,-1.0*(
-            float(scalars["tau"])*bat.GetEfficiencyIn()
-            / bat.GetReferenceCapacity()),
-            1.0*(float(scalars["tau"]) / bat.GetReferenceCapacity())]
-        for k in range(tech_maxes[bat.GetName()]):
-            p.linear_constraints.add(lin_expr=[
-                    cplex.SparsePair([B_soc_var(bat,k+1,start_period),
-                                soc_start_var(bat,k+1),
-                                W_var(bat,k+1),
-                                I_plus_var(bat,k+1,start_period),
-                                I_minus_var(bat,k+1,start_period)]
-                            ,val)],
-                    senses=['L'],
-                    rhs=[1], 
-                    names=['Init_Cond_2a_'+bat.GetName()+".K"+str(k+1)]) 
-    for bat in batteries:
-        #constraint INIT_COND_2b -- SOC at start of time period
-        val = [1,-1.0,-1.0,-1.0*(
-            float(scalars["tau"])*bat.GetEfficiencyIn()
-            / bat.GetReferenceCapacity()),
-            (float(scalars["tau"]) / bat.GetReferenceCapacity())]
-        for k in range(tech_maxes[bat.GetName()]):
-            p.linear_constraints.add(lin_expr=[
-                    cplex.SparsePair([B_soc_var(bat,k+1,start_period),
-                                soc_start_var(bat,k+1),
-                                W_var(bat,k+1),
-                                I_plus_var(bat,k+1,start_period),
-                                I_minus_var(bat,k+1,start_period)]
-                            ,val)],
-                    senses=['G'],
-                    rhs=[-1], 
-                    names=['Init_Cond_2b_'+bat.GetName()+".K"+str(k+1)])              
-    for bat in batteries:
-        #constraint INIT_COND_3 -- current bounds start of time period
-        val = [1.0,-1.0*(bat.GetIUMinus())]
-        for k in range(tech_maxes[bat.GetName()]):
-            p.linear_constraints.add(lin_expr=[
-                    cplex.SparsePair([I_minus_var(bat,k+1,start_period),
-                                soc_start_var(bat,k+1)]
-                            ,val)],
-                    senses=['L'],
-                    rhs=[0], 
-                    names=['Init_Cond_3_'+bat.GetName()+".K"+str(k+1)]) 
-    #constraint 6a - lifecycles for generators
-#    for gen in generators:
-#        val = [1.0]
-#        val.extend([-1.0*float(scalars["tau"]) for t in range(num_periods)])
-#        for k in range(tech_maxes[gen.GetName()]):
-#            p.linear_constraints.add(
-#                    lin_expr=[cplex.SparsePair([L_var(gen,k+1)]+[
-#                        G_var(gen,k+1,t+start_period)
-#                        for t in range(num_periods)],val)],
-#                    senses=['G'], 
-#                    rhs=[0], 
-#                    names=['Life_6a_'+gen.GetName()+".K"+str(k+1)])
-    #constraint Life_6b - Lifetimes of batteries
-#    for bat in batteries:
-#        val = [1] 
-#        val.extend([-1.0*float(scalars["tau"])*bat.GetASOC()/bat.GetReferenceCapacity()
-#                for t in range(num_periods)])
-#        val.extend([1.0*float(scalars["tau"])*bat.GetDSOC()/bat.GetReferenceCapacity()
-#                for t in range(num_periods)])
-#        for k in range(tech_maxes[bat.GetName()]):
-#            p.linear_constraints.add(
-#                lin_expr=[cplex.SparsePair([
-#                    L_var(bat,k+1)]+
-#                    [I_plus_var(bat,k+1,t) 
-#                        for t in range(start_period,
-#                            end_period+1)]
-#                    + [Z_plus_var(bat,k+1,t) 
-#                        for t in range(start_period,
-#                            end_period+1)],
-#                    val)],
-#                senses=['G'], 
-#                rhs=[0], 
-#                names=['Life_6b_'+bat.GetName()+".K"+str(k+1)])
-    
-    #constraint Linear_1 - Linearization of P_plus
+    #constraints 18a, 18b use Z in the place of B_soc*I_plus, substituted via
+    #constraints 23-24, which are not implemented here for efficiency.
+    #constraint Linear_18a: Linearization of P_plus (Z replaces B_soc*I_plus)
     for bat in batteries:
         val = [1, 
                 -1.0*bat.GetVoltageA(),
@@ -970,10 +642,10 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                                 end_period+1)],
                     senses=['E' for t in range(num_periods)], 
                     rhs=scipy.zeros(num_periods), 
-                    names=['Linear_1_'+bat.GetName()+".K"+str(k+1)
+                    names=['Linear_18a_'+bat.GetName()+".K"+str(k+1)
                         +".TT"+str(t) for t in range(start_period,
                                 end_period+1)])
-    #constraint Linear_2 - Linearization of P_minus
+    #constraint Linear_18b: Linearization of P_minus (Z replaces B_soc*I_minus)
     for bat in batteries:
         val = [1, 
                 -1.0*bat.GetVoltageA(),
@@ -992,212 +664,325 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                     names=['Linear_2_'+bat.GetName()+".K"+str(k+1)
                         +".TT"+str(t) for t in range(start_period,
                                 end_period+1)])
-                
-    #constraint Linear_3 -- Linearization I_minus: bounded above by i_U_minus * B-
+    
+    #constraint 18c -- State of charge tracking
     for bat in batteries:
-        val = [1.0,
-                -1.0*bat.GetIUMinus()]
-        for k in range(1,tech_maxes[bat.GetName()]+1):
-            p.linear_constraints.add(
-                lin_expr=[cplex.SparsePair([
-                        I_minus_var(bat,k,t),
-                        B_minus_var(bat,k,t)],
-                        val) for t in range(start_period,
-                                end_period+1)],
-                senses=['L' for t in range(num_periods)], 
-                rhs=scipy.zeros(num_periods), 
-                names=['Linear_3_'+bat.GetName()+".K"+str(k)+
-                    ".TT"+str(t) for t in range(start_period,
-                                end_period+1)])
-                        
-    #constraint Linear_4 -- Linearization I_plus: bounded above by i_U_plus * B-
+        val = [1.0,-1.0,-1.0*(
+            float(scalars["tau"])*bat.GetEfficiencyIn()
+            / bat.GetReferenceCapacity()),
+            1.0*(float(scalars["tau"]) / bat.GetReferenceCapacity())]
+        for k in range(tech_maxes[bat.GetName()]):
+            p.linear_constraints.add(lin_expr=[
+                    cplex.SparsePair([B_soc_var(bat,k+1,t),
+                                B_soc_var(bat,k+1,t-1),
+                                I_plus_var(bat,k+1,t),
+                                I_minus_var(bat,k+1,t)]
+                            ,val) for t in range(start_period,end_period+1)],
+                    senses=['E' for t in range(num_periods)],
+                    rhs=scipy.zeros(num_periods), 
+                    names=['Bat_Op_18c_'+bat.GetName()+".K"+str(k+1) +
+                ".TT"+str(t) for t in range(start_period,end_period+1)])
+                    
     for bat in batteries:
-        val = [1.0,
-                -1.0*bat.GetIUPlus()]
+        #constraint 18d1 -- SOC maximum (note: includes soc_start)
+        val = [1,-1.0*float(scalars["soc_max"])]
+        for k in range(tech_maxes[bat.GetName()]):
+            p.linear_constraints.add(lin_expr=[
+                    cplex.SparsePair([B_soc_var(bat,k+1,t),
+                                W_var(bat,k+1)]
+                            ,val) for t in range(start_period,end_period+1)],
+                    senses=['L' for t in range(num_periods)],
+                    rhs=scipy.zeros(num_periods), 
+                    names=['Bat_Op_18d1_'+bat.GetName()+".K"+str(k+1) +
+                ".TT"+str(t) for t in range(start_period-1,end_period+1)])
+    for bat in batteries:
+        #constraint 18d2 -- SOC minimum (note: includes soc_start)
+        val = [1,-1.0*float(scalars["soc_min"])]
+        for k in range(tech_maxes[bat.GetName()]):
+            p.linear_constraints.add(lin_expr=[
+                    cplex.SparsePair([B_soc_var(bat,k+1,t),
+                                W_var(bat,k+1)]
+                            ,val) for t in range(start_period,end_period+1)],
+                    senses=['G' for t in range(num_periods)],
+                    rhs=scipy.zeros(num_periods), 
+                    names=['Bat_Op_18d2_'+bat.GetName()+".K"+str(k+1) +
+                ".TT"+str(t) for t in range(start_period-1,end_period+1)])
+    
+    for bat in batteries:
+        #constraint 18e -- SOC equal for all batteries of type b
+        val = [1.0,-1.0,1.0]
+        for k in range(tech_maxes[bat.GetName()]-1):
+            p.linear_constraints.add(lin_expr=[
+                    cplex.SparsePair([B_soc_var(bat,k+1,t),
+                                B_soc_var(bat,k+2,t),
+                                W_var(bat,k+1)]
+                        ,val) for t in range(start_period,end_period+1)],
+                    senses=['L' for t in range(num_periods)],
+                    rhs=1.0*scipy.ones(num_periods), 
+                    names=['Bat_Op_18e_'+bat.GetName()+".K"+str(k+1) +
+                ".TT"+str(t) for t in range(start_period,end_period+1)])
+    for bat in batteries:
+        #constraint 18f -- SOC equal for all batteries of type b
+        val = [1.0,1.0,-1.0]
+        for k in range(tech_maxes[bat.GetName()]-1):
+            p.linear_constraints.add(lin_expr=[
+                    cplex.SparsePair([B_soc_var(bat,k+1,t),
+                                B_soc_var(bat,k+2,t),
+                                W_var(bat,k+1)]
+                        ,val) for t in range(start_period,end_period+1)],
+                    senses=['G' for t in range(num_periods)],
+                    rhs=-1.0*scipy.ones(num_periods), 
+                    names=['Bat_Op_18f_'+bat.GetName()+".K"+str(k+1) +
+                ".TT"+str(t) for t in range(start_period,end_period+1)])
+ 
+    #constraint 18g -- tracks starting storage inventory
+    ind = ['battery_inv']  #R^ell
+    val = [-1.0]          
+    for bat in batteries:
         for k in range(1,tech_maxes[bat.GetName()]+1):
-            p.linear_constraints.add(
-                lin_expr=[cplex.SparsePair([
-                        I_plus_var(bat,k,t),
-                        B_plus_var(bat,k,t)],
-                        val) for t in range(start_period,
-                                end_period+1)],
-                senses=['L' for t in range(num_periods)], 
-                rhs=scipy.zeros(num_periods), 
-                names=['Linear_4_'+bat.GetName()+".K"+str(k)+
-                    ".TT"+str(t) for t in range(start_period,
-                                end_period+1)])
-    ##constraint Linear_4 -- Linearization Y_minus: bounded below by min_cur * B-
-    #for bat in batteries:
-    #    val = [1.0,
-    #            -1.0*bat.GetMinCurrent()]
-    #    for k in range(1,tech_maxes[bat.GetName()]+1):
-    #        p.linear_constraints.add(
-    #            lin_expr=[cplex.SparsePair([
-    #                    Y_minus_var(bat,k,t),
-    #                    B_minus_var(bat,k,t)],
-    #                    val) for t in range(start_period,
-    #                            end_period+1)],
-    #            senses=['G' for t in range(num_periods)], 
-    #            rhs=scipy.zeros(num_periods), 
-    #            names=['Linear_4_'+bat.GetName()+".K"+str(k)+
-    #                ".TT"+str(t) for t in range(start_period,
-    #                            end_period+1)]) 
-                                                
-    #constraint Linear_5 -- Linearization Y_Plus: bounded above by i_U_plus * B+
-#    for bat in batteries:
-#        val = [1.0,
-#                -1.0*bat.GetIUPlus()]   
-#        for k in range(1,tech_maxes[bat.GetName()]+1):
-#            p.linear_constraints.add(
-#                lin_expr=[cplex.SparsePair([
-#                        Y_plus_var(bat,k,t),
-#                        B_plus_var(bat,k,t)],
-#                        val) for t in range(start_period,
-#                                end_period+1)],
-#                senses=['L' for t in range(num_periods)], 
-#                rhs=scipy.zeros(num_periods), 
-#                names=['Linear_5_'+bat.GetName()+".K"+str(k)+
-#                    ".TT"+str(t) for t in range(start_period,
-#                                end_period+1)])
-    ##constraint Linear_6 -- Linearization Y_Plus: bounded below by min_cur * B+
-    #for bat in batteries:
-    #    val = [1.0,
-    #            -1.0*bat.GetMinCurrent()]
-    #    for k in range(1,tech_maxes[bat.GetName()]+1):
-    #        p.linear_constraints.add(
-    #            lin_expr=[cplex.SparsePair([
-    #                    Y_plus_var(bat,k,t),
-    #                    B_plus_var(bat,k,t)],
-    #                    val) for t in range(start_period,
-    #                            end_period+1)],
-    #            senses=['G' for t in range(num_periods)], 
-    #            rhs=scipy.zeros(num_periods), 
-    #            names=['Linear_6_'+bat.GetName()+".K"+str(k)+
-    #                ".TT"+str(t) for t in range(start_period,
-    #                            end_period+1)])     
+            ind.append(soc_start_var(bat,k))
+            val.append(bat.GetReferenceCapacity())
+    p.linear_constraints.add(
+        lin_expr=[cplex.SparsePair(ind,val)],
+        senses=['E'], 
+        rhs=[0], 
+        names=['INVENTORY_18g'])
+    
+    #constraint 18h -- tracks ending storage inventory
+    ind = ['battery_inv']
+    val = [-1.0]          
+    for bat in batteries:
+        for k in range(1,tech_maxes[bat.GetName()]+1):
+            ind.append(soc_end_var(bat,k))
+            val.append(bat.GetReferenceCapacity())
+    p.linear_constraints.add(
+        lin_expr=[cplex.SparsePair(ind,val)],
+        senses=['E'], 
+        rhs=[0], 
+        names=['INVENTORY_18h'])
+    
+    for bat in batteries:
+        #constraint 18i1 -- power out upper limits of battery type b
+        val = [1.0,-1.0*bat.GetMaxPower()]
+        for k in range(tech_maxes[bat.GetName()]):
+            p.linear_constraints.add(lin_expr=[
+                    cplex.SparsePair([P_plus_var(bat,k+1,t),
+                                B_plus_var(bat,k+1,t)]
+                        ,val) for t in range(start_period,end_period+1)],
+                    senses=['L' for t in range(num_periods)],
+                    rhs=scipy.zeros(num_periods), 
+                    names=['Bat_Op_18i1_'+bat.GetName()+".K"+str(k+1) +
+                ".TT"+str(t) for t in range(start_period,end_period+1)])
+    for bat in batteries:
+        #constraint 18i2 -- power in lower limits of battery type b
+        val = [1.0,-1.0*bat.GetMinPower()]
+        for k in range(tech_maxes[bat.GetName()]):
+            p.linear_constraints.add(lin_expr=[
+                    cplex.SparsePair([P_plus_var(bat,k+1,t),
+                                B_plus_var(bat,k+1,t)]
+                        ,val) for t in range(start_period,end_period+1)],
+                    senses=['G' for t in range(num_periods)],
+                    rhs=scipy.zeros(num_periods), 
+                    names=['Bat_Op_18i2_'+bat.GetName()+".K"+str(k+1) +
+                ".TT"+str(t) for t in range(start_period,end_period+1)])
+                    
+    for bat in batteries:
+        #constraint 18j1 -- power in upper limits of battery type b
+        val = [1.0,-1.0*bat.GetMaxPower()]
+        for k in range(tech_maxes[bat.GetName()]):
+            p.linear_constraints.add(lin_expr=[
+                    cplex.SparsePair([P_minus_var(bat,k+1,t),
+                                B_minus_var(bat,k+1,t)]
+                        ,val) for t in range(start_period,end_period+1)],
+                    senses=['L' for t in range(num_periods)],
+                    rhs=scipy.zeros(num_periods), 
+                    names=['Bat_Op_18j1_'+bat.GetName()+".K"+str(k+1) +
+                ".TT"+str(t) for t in range(start_period,end_period+1)])
+    for bat in batteries:
+        #constraint 18j2 -- power out lower limits of battery type b
+        val = [1.0,-1.0*bat.GetMinPower()]
+        for k in range(tech_maxes[bat.GetName()]):
+            p.linear_constraints.add(lin_expr=[
+                    cplex.SparsePair([P_minus_var(bat,k+1,t),
+                                B_minus_var(bat,k+1,t)]
+                        ,val) for t in range(start_period,end_period+1)],
+                    senses=['G' for t in range(num_periods)],
+                    rhs=scipy.zeros(num_periods), 
+                    names=['Bat_Op_18j2_'+bat.GetName()+".K"+str(k+1) +
+                ".TT"+str(t) for t in range(start_period,end_period+1)])
+                    
+                    
+    for bat in batteries:
+        #constraint 18k1 -- current in upper limits (semicontinuous)
+        val = [1.0,-1.0*bat.GetIUPlus()]
+        for k in range(tech_maxes[bat.GetName()]):
+            p.linear_constraints.add(lin_expr=[
+                    cplex.SparsePair([I_plus_var(bat,k+1,t),
+                                B_plus_var(bat,k+1,t)]
+                            ,val) for t in range(start_period,end_period+1)],
+                    senses=['L' for t in range(num_periods)],
+                    rhs=scipy.zeros(num_periods), 
+                    names=['Bat_Op_18k1_'+bat.GetName()+".K"+str(k+1) +
+                ".TT"+str(t) for t in range(start_period,end_period+1)])
+    for bat in batteries:
+        #constraint 18k2 -- current in lower limits (semicontinuous)
+        val = [1.0,-1.0*bat.GetMinCurrent()]
+        for k in range(tech_maxes[bat.GetName()]):
+            p.linear_constraints.add(lin_expr=[
+                    cplex.SparsePair([I_plus_var(bat,k+1,t),
+                                B_plus_var(bat,k+1,t)]
+                            ,val) for t in range(start_period,end_period+1)],
+                    senses=['G' for t in range(num_periods)],
+                    rhs=scipy.zeros(num_periods), 
+                    names=['Bat_Op_18k2_'+bat.GetName()+".K"+str(k+1) +
+                ".TT"+str(t) for t in range(start_period,end_period+1)])
+                    
+    for bat in batteries:
+        #constraint 18l1 -- current out upper limits (semicontinuous)
+        val = [1.0,-1.0*bat.GetIUMinus()]
+        for k in range(tech_maxes[bat.GetName()]):
+            p.linear_constraints.add(lin_expr=[
+                    cplex.SparsePair([I_minus_var(bat,k+1,t),
+                                B_minus_var(bat,k+1,t)]
+                            ,val) for t in range(start_period,end_period+1)],
+                    senses=['L' for t in range(num_periods)],
+                    rhs=scipy.zeros(num_periods), 
+                    names=['Bat_Op_18l1_'+bat.GetName()+".K"+str(k+1) +
+                ".TT"+str(t) for t in range(start_period,end_period+1)])
+    for bat in batteries:
+        #constraint 18l2 -- current out upper limits (semicontinuous)
+        val = [1.0,-1.0*bat.GetMinCurrent()]
+        for k in range(tech_maxes[bat.GetName()]):
+            p.linear_constraints.add(lin_expr=[
+                    cplex.SparsePair([I_minus_var(bat,k+1,t),
+                                B_minus_var(bat,k+1,t)]
+                            ,val) for t in range(start_period,end_period+1)],
+                    senses=['G' for t in range(num_periods)],
+                    rhs=scipy.zeros(num_periods), 
+                    names=['Bat_Op_18l2_'+bat.GetName()+".K"+str(k+1) +
+                ".TT"+str(t) for t in range(start_period,end_period+1)])
 
-    #constraint Linear_7 --  Y_minus bounded above by i_U_minus*B_soc
-#    for bat in batteries:                          
-#        val = [1.0,-1.0*(bat.GetReferenceCapacity()
-#                / (1+bat.GetRateOut()))]
-#        for k in range(tech_maxes[bat.GetName()]):
-#            p.linear_constraints.add(lin_expr=[
-#                    cplex.SparsePair([Y_minus_var(bat,k+1,t),
-#                                B_soc_var(bat,k+1,t-1)]
-#                            ,val) for t in range(start_period,end_period+1)],
-#                    senses=['L' for t in range(num_periods)],
-#                    rhs=scipy.zeros(num_periods), 
-#                    names=['Linear_7_'+bat.GetName()+".K"+str(k+1) +
-#                ".TT"+str(t) for t in range(start_period,end_period+1)])
+    for bat in batteries:
+        #constraint 18m -- current out upper limits (bound by SOC)
+        val = [1.0,-1.0*(bat.GetIUMinus())]
+        for k in range(tech_maxes[bat.GetName()]):
+            p.linear_constraints.add(lin_expr=[
+                    cplex.SparsePair([I_minus_var(bat,k+1,t),
+                                B_soc_var(bat,k+1,t-1)]
+                        ,val) for t in range(start_period,end_period+1)],
+                    senses=['L' for t in range(num_periods)],
+                    rhs=scipy.zeros(num_periods), 
+                    names=['Bat_Op_18m_'+bat.GetName()+".K"+str(k+1) +
+                ".TT"+str(t) for t in range(start_period,end_period+1)])
     
-    #constraint INIT_COND_4 -- Y_minus bounds at start of scenario
-#    for bat in batteries:
-#        val = [1.0,-1.0*(bat.GetReferenceCapacity()
-#                / (1+bat.GetRateOut())),(bat.GetReferenceCapacity()
-#                / (1+bat.GetRateOut()))]
-#        for k in range(tech_maxes[bat.GetName()]):
-#            p.linear_constraints.add(lin_expr=[
-#                    cplex.SparsePair([Y_minus_var(bat,k+1,start_period),
-#                                soc_start_var(bat,k+1),
-#                                W_var(bat,k+1)]
-#                            ,val)],
-#                    senses=['L'],
-#                    rhs=[(bat.GetReferenceCapacity() / 
-#                            (1+bat.GetRateOut()))], 
-#                    names=['Init_Cond_4_'+bat.GetName()+".K"+str(k+1)]) 
-    #constraint Linear_8 - relation of Y_plus to I_plus
-#    for bat in batteries:
-#        val = [1.0,-1.0,-1.0]  
-#        for k in range(1,tech_maxes[bat.GetName()]+1):
-#            p.linear_constraints.add(
-#                lin_expr=[cplex.SparsePair([
-#                        I_plus_var(bat,k,t),
-#                        Y_plus_var(bat,k,t),
-#                        B_plus_var(bat,k,t)],
-#                        val) for t in range(start_period,
-#                                end_period+1)],
-#                senses=['G' for t in range(num_periods)], 
-#                rhs=-1.0*scipy.ones(num_periods), 
-#                names=['Linear_8_'+bat.GetName()+".K"+str(k)+
-#                    ".TT"+str(t) for t in range(start_period,
-#                                end_period+1)])
-    #constraint Linear_9 - relation of Y_plus to I_plus 
-#    for bat in batteries:
-#        val = [1.0,-1.0,1.0]  
-#        for k in range(1,tech_maxes[bat.GetName()]+1):
-#            p.linear_constraints.add(
-#                lin_expr=[cplex.SparsePair([
-#                        I_plus_var(bat,k,t),
-#                        Y_plus_var(bat,k,t),
-#                        B_plus_var(bat,k,t)],
-#                        val) for t in range(start_period,
-#                                end_period+1)],
-#                senses=['L' for t in range(num_periods)], 
-#                rhs=scipy.ones(num_periods), 
-#                names=['Linear_9_'+bat.GetName()+".K"+str(k)+
-#                    ".TT"+str(t) for t in range(start_period,
-#                                end_period+1)])    
-    #constraint Linear_10 - relation of Y_minus to I_minus
-#    for bat in batteries:
-#        val = [1.0,-1.0,-1.0]  
-#        for k in range(1,tech_maxes[bat.GetName()]+1):
-#            p.linear_constraints.add(
-#                lin_expr=[cplex.SparsePair([
-#                        I_minus_var(bat,k,t),
-#                        Y_minus_var(bat,k,t),
-#                        B_minus_var(bat,k,t)],
-#                        val) for t in range(start_period,
-#                                end_period+1)],
-#                senses=['G' for t in range(num_periods)], 
-#                rhs=-1.0*scipy.ones(num_periods), 
-#                names=['Linear_10_'+bat.GetName()+".K"+str(k)+
-#                    ".TT"+str(t) for t in range(start_period,
-#                                end_period+1)])    
-    #constraint Linear_11 - relation of Y_minus to I_minus
-#    for bat in batteries:
-#        val = [1.0,-1.0,1.0]  
-#        for k in range(1,tech_maxes[bat.GetName()]+1):
-#            p.linear_constraints.add(
-#                lin_expr=[cplex.SparsePair([
-#                        I_minus_var(bat,k,t),
-#                        Y_minus_var(bat,k,t),
-#                        B_minus_var(bat,k,t)],
-#                        val) for t in range(start_period,
-#                                end_period+1)],
-#                senses=['L' for t in range(num_periods)], 
-#                rhs=scipy.ones(num_periods), 
-#                names=['Linear_11_'+bat.GetName()+".K"+str(k)+
-#                    ".TT"+str(t) for t in range(start_period,
-#                                end_period+1)])    
+    for bat in batteries:
+        #constraint 18n -- Only use batteries that you buy
+        val = [1,1,-1]
+        for k in range(tech_maxes[bat.GetName()]):
+            p.linear_constraints.add(lin_expr=[
+                    cplex.SparsePair([B_minus_var(bat,k+1,t),
+                                B_plus_var(bat,k+1,t),
+                                W_var(bat,k+1)],val) 
+                        for t in range(start_period,end_period+1)],
+                    senses=['L' for t in range(num_periods)],
+                    rhs=scipy.zeros(num_periods), 
+                    names=['Bat_Op_18n_'+bat.GetName()+".K"+str(k+1) +
+                ".TT"+str(t) for t in range(start_period,end_period+1)])
         
-    #replacement constraint = make Y_plus=I_plus
-    #
-    #for bat in batteries:
-    #    val = [1.0,-1.0]
-    #    for k in range(1,tech_maxes[bat.GetName()]+1):
-    #        p.linear_constraints.add(
-    #            lin_expr=[cplex.SparsePair([
-    #                    I_plus_var(bat,k,t),
-    #                    Y_plus_var(bat,k,t)],
-    #                    val) for t in range(start_period,
-    #                            end_period+1)],
-    #            senses=['E' for t in range(num_periods)], 
-    #            rhs=scipy.zeros(num_periods), 
-    #            names=['Linear22eX_'+bat.GetName()+".K"+str(k+1)+
-    #                ".TT"+str(t) for t in range(start_period,
-    #                            end_period+1)])
-    #        p.linear_constraints.add(
-    #            lin_expr=[cplex.SparsePair([
-    #                    I_minus_var(bat,k,t),
-    #                    Y_minus_var(bat,k,t)],
-    #                    val) for t in range(start_period,
-    #                            end_period+1)],
-    #            senses=['E' for t in range(num_periods)], 
-    #            rhs=scipy.zeros(num_periods), 
-    #            names=['Linear22fX_'+bat.GetName()+".K"+str(k+1)+
-    #                ".TT"+str(t) for t in range(start_period,
-    #                            end_period+1)])    
+    for bat in batteries:
+        #constraint 18o -- Can't simultaneously charge and discharge batteries 
+        val=[1,1]
+        for batp in batteries:
+            if batp != bat:
+                for k in range(tech_maxes[bat.GetName()]):
+                    for kp in range(tech_maxes[batp.GetName()]):
+                        p.linear_constraints.add(lin_expr=[
+                            cplex.SparsePair([B_plus_var(bat,k+1,t),
+                            B_minus_var(batp,kp+1,t)],val) 
+                            for t in range(
+                                start_period,end_period+1)],
+                    senses=['L' for t in range(num_periods)],
+                    rhs=scipy.ones(num_periods,dtype=float), 
+                    names=['Bat_Op_18o_'+bat.GetName()+".K"+str(k+1) 
+                        +".BP"+batp.GetName()[-1]+
+                        ".KP"+str(kp+1)+".TT"+str(t) 
+                        for t in range(start_period,end_period+1)])
     
+    #Constraint 19a: Nonanticipativity of W      
+    #Fix purchase decision if running the upper bound model
+    if upper_bound:
+        inds = []
+        vals = []
+        for tech in technologies: 
+            if tech.GetType() != "PVArray":
+                for k in range(1,tech_maxes[tech.GetName()]+1):
+                    inds.append(W_var(tech,k))
+                    if tech.GetName() in W_init[scenario].keys(): 
+                        if "K"+str(k) in W_init[scenario][tech.GetName()].keys():
+                            vals.append(W_init[scenario][tech.GetName()]["K"+str(k)])
+                        else: vals.append(0)
+                    else: vals.append(0)
+        #print inds, vals
+        p.variables.set_upper_bounds(zip(inds,vals))
+        p.variables.set_lower_bounds(zip(inds,vals))  
+    
+    #Constraint 19b: Nonanticipativity of X   
+    #Fix purchase decision if running the upper bound model
+    if upper_bound:
+        inds = []
+        vals = []
+        for tech in technologies: 
+            if tech.GetType() == "PVArray":
+                inds.append(X_var(tech))
+                if tech.GetName() in X_init[scenario].keys():
+                    vals.append(X_init[scenario][tech.GetName()])
+                else: vals.append(0) 
+        #print inds, vals
+        p.variables.set_upper_bounds(zip(inds,vals))
+        p.variables.set_lower_bounds(zip(inds,vals))  
+    
+    #Constraint 19c: Nonanticipativity of R^\ell.  This is enforced by 
+    #fixing the starting state of charge for all batteriesin the upper bound.
+    #model, and is relaxed in the lower bound model.
+    if upper_bound and start_period != 1:
+        val = [1.0,-1.0*boundary_soc]
+        sense = ['E']
+        for bat in batteries:
+            for k in range(1,tech_maxes[bat.GetName()]+1):
+                p.linear_constraints.add(
+                    lin_expr=[cplex.SparsePair([soc_start_var(bat,k),W_var(bat,k)],
+                        val)],
+                    senses=sense, 
+                    rhs=[0], 
+                    names=['Storage_inv_start_UB_19c1'+bat.GetName()+".K"+str(k)])
+    if upper_bound and start_period != 1:
+        val = [1.0,-1.0*boundary_soc]
+        sense = ['E']
+        ending = 'UB_'
+        for bat in batteries:
+            for k in range(1,tech_maxes[bat.GetName()]+1):
+                p.linear_constraints.add(
+                    lin_expr=[cplex.SparsePair([soc_end_var(bat,k),W_var(bat,k)],
+                        val)],
+                    senses=sense, 
+                    rhs=[0], 
+                    names=['Storage_inv_end_UB_19c2'+ending+bat.GetName()+".K"+str(k)]) 
+    
+    #Constraint 20: boundary condition for battery state-of-charge
+    if start_period == 1: 
+        val = [1.0,-1.0*scalars["b_init"]]
+        sense = ['E']
+        for bat in batteries:
+            for k in range(1,tech_maxes[bat.GetName()]+1):
+                p.linear_constraints.add(
+                    lin_expr=[cplex.SparsePair([soc_start_var(bat,k),W_var(bat,k)],
+                        val)],
+                    senses=sense, 
+                    rhs=[0], 
+                    names=['Storage_inv_boundary_'+bat.GetName()+".K"+str(k)])  
+        
+    #constraints (21) denote variable bounds
+    #constraints (22)-(24) not directly implemented
     def i_u_part_minus(bat,n):
         return bat.GetMinCurrent() + batPartsMinus[n]*(bat.GetIUMinus()-bat.GetMinCurrent())
     def i_u_part_plus(bat,n):
@@ -1205,7 +990,42 @@ def SolvePartition(inputs, scenario, start_period, end_period,
     def soc_part(bat,m):
         return bat.GetMinSOC() + socParts[m]*(bat.GetMaxSOC()-bat.GetMinSOC())
     
-    #constraint 23a -- lambda plus assignment based on charge current (lb).
+    #constraint 25a -- one lambda per BKNT - reconcile plus.
+    val = flatten([[1.0 for i in range(1,numBatParts+1)] for m in range(1,numSocParts+1)])+[-1.0]
+    for bat in batteries:
+        for k in range(1,tech_maxes[bat.GetName()]+1):
+             p.linear_constraints.add(
+                    lin_expr=[cplex.SparsePair(flatten(
+                            [[lambda_plus_var(bat,k,m,n,t) 
+                            for m in range(1,numSocParts+1)] 
+                            for n in range(1,numBatParts+1)]
+                            )+[B_plus_var(bat,k,t)],
+                            val) for t in range(start_period,
+                                    end_period+1)],
+                    senses=['E' for t in range(num_periods)], 
+                    rhs=scipy.zeros(num_periods), 
+                    names=['Linear_25a_'+bat.GetName()+".K"+str(k)+
+                        ".TT"+str(t) for t in range(start_period,
+                                    end_period+1)])       
+            
+    #constraint 25b -- one lambda per BKNT - reconcile minus.
+    for bat in batteries:
+        for k in range(1,tech_maxes[bat.GetName()]+1):
+             p.linear_constraints.add(
+                    lin_expr=[cplex.SparsePair(flatten(
+                            [[lambda_minus_var(bat,k,m,n,t) 
+                            for m in range(1,numSocParts+1)] 
+                            for n in range(1,numBatParts+1)]
+                            )+[B_minus_var(bat,k,t)],
+                            val) for t in range(start_period,
+                                    end_period+1)],
+                    senses=['E' for t in range(num_periods)], 
+                    rhs=scipy.zeros(num_periods), 
+                    names=['Linear_25b_'+bat.GetName()+".K"+str(k)+
+                        ".TT"+str(t) for t in range(start_period,
+                                    end_period+1)]) 
+    
+    #constraint 25c -- lambda plus assignment based on charge current (lb).
     for bat in batteries:
         for n in range(1,numBatParts+1):
             for m in range(1,numSocParts+1):
@@ -1222,11 +1042,11 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                                         end_period+1)],
                         senses=['G' for t in range(num_periods)], 
                         rhs=scipy.zeros(num_periods), 
-                        names=['Linear_23a_'+bat.GetName()+".K"+str(k)+
+                        names=['Linear_25c_'+bat.GetName()+".K"+str(k)+
                             ".M"+str(m)+".N"+str(n)+
                             ".TT"+str(t) for t in range(start_period,
                                         end_period+1)])
-    #constraint 23b -- lambda plus assignment based on charge current (ub).
+    #constraint 25d -- lambda plus assignment based on charge current (ub).
     for bat in batteries:
         for n in range(1,numBatParts+1):
             for m in range(1,numSocParts+1):
@@ -1243,11 +1063,11 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                                         end_period+1)],
                         senses=['L' for t in range(num_periods)], 
                         rhs=scipy.zeros(num_periods), 
-                        names=['Linear_23b_'+bat.GetName()+".K"+str(k)+
+                        names=['Linear_25d_'+bat.GetName()+".K"+str(k)+
                             ".M"+str(m)+".N"+str(n)+
                             ".TT"+str(t) for t in range(start_period,
                                         end_period+1)])
-    #constraint 23c -- lambda minus assignment based on discharge current (lb).
+    #constraint 25e -- lambda minus assignment based on discharge current (lb).
     for bat in batteries:
         for n in range(1,numBatParts+1):
             for m in range(1,numSocParts+1):
@@ -1264,11 +1084,11 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                                         end_period+1)],
                         senses=['G' for t in range(num_periods)], 
                         rhs=scipy.zeros(num_periods), 
-                        names=['Linear_23c_'+bat.GetName()+".K"+str(k)+
+                        names=['Linear_25e_'+bat.GetName()+".K"+str(k)+
                             ".M"+str(m)+".N"+str(n)+
                             ".TT"+str(t) for t in range(start_period,
                                         end_period+1)])
-    #constraint 23d -- lambda minus assignment based on discharge current (ub).
+    #constraint 25f -- lambda minus assignment based on discharge current (ub).
     for bat in batteries:
         for n in range(1,numBatParts+1):
             for m in range(1,numSocParts+1):
@@ -1285,12 +1105,13 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                                         end_period+1)],
                         senses=['L' for t in range(num_periods)], 
                         rhs=scipy.zeros(num_periods), 
-                        names=['Linear_23d_'+bat.GetName()+".K"+str(k)+
+                        names=['Linear_25f_'+bat.GetName()+".K"+str(k)+
                             ".M"+str(m)+".N"+str(n)+
                             ".TT"+str(t) for t in range(start_period,
                                         end_period+1)])
 
-    #constraint 23e -- lambda(-) assignment based on previous SOC (lb).
+    #constraint 25f1 -- lambda(-) assignment based on previous SOC (lb).
+    #(not in the paper; this is only for the bivariate formulation)
     for bat in batteries:
         for n in range(1,numBatParts+1):
             for m in range(1,numSocParts+1):
@@ -1305,11 +1126,12 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                                         end_period+1)],
                         senses=['G' for t in range(num_periods)], 
                         rhs=scipy.zeros(num_periods)+bat.GetMinSOC(), 
-                        names=['Linear_23e_'+bat.GetName()+".K"+str(k)+
+                        names=['Linear_25f1_'+bat.GetName()+".K"+str(k)+
                             ".M"+str(m)+".N"+str(n)+
                             ".TT"+str(t) for t in range(start_period,
                                         end_period+1)])
-    #constraint 23f -- lambda(-) assignment based on previous SOC (ub).
+    #constraint 25f2 -- lambda(-) assignment based on previous SOC (ub).
+    #(not in the paper; this is only for the bivariate formulation)
     for bat in batteries:
         for n in range(1,numBatParts+1):
             for m in range(1,numSocParts+1):
@@ -1324,12 +1146,13 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                                         end_period+1)],
                         senses=['L' for t in range(num_periods)], 
                         rhs=scipy.zeros(num_periods)+bat.GetMaxSOC(), 
-                        names=['Linear_23f_'+bat.GetName()+".K"+str(k)+
+                        names=['Linear_23f2_'+bat.GetName()+".K"+str(k)+
                             ".M"+str(m)+".N"+str(n)+
                             ".TT"+str(t) for t in range(start_period,
                                         end_period+1)])
                         
-    #constraint 23g -- lambda(+) assignment based on previous SOC.
+    #constraint 25f3 -- lambda(+) assignment based on previous SOC (lb).
+    #(not in the paper; this is only for the bivariate formulation)
     for bat in batteries:
         for n in range(1,numBatParts+1):
             for m in range(1,numSocParts+1):
@@ -1344,12 +1167,13 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                                         end_period+1)],
                         senses=['G' for t in range(num_periods)], 
                         rhs=scipy.zeros(num_periods)+bat.GetMinSOC(), 
-                        names=['Linear_23g_'+bat.GetName()+".K"+str(k)+
+                        names=['Linear_23f3_'+bat.GetName()+".K"+str(k)+
                             ".M"+str(m)+".N"+str(n)+
                             ".TT"+str(t) for t in range(start_period,
                                         end_period+1)])
                         
-    #constraint 23h -- lambda(+) assignment based on previous SOC.
+    #constraint 25f4 -- lambda(+) assignment based on previous SOC (ub).
+    #(not in the paper; this is only for the bivariate formulation)
     for bat in batteries:
         for n in range(1,numBatParts+1):
             for m in range(1,numSocParts+1):
@@ -1364,47 +1188,13 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                                         end_period+1)],
                         senses=['L' for t in range(num_periods)], 
                         rhs=scipy.zeros(num_periods)+bat.GetMaxSOC(), 
-                        names=['Linear_23h_'+bat.GetName()+".K"+str(k)+
+                        names=['Linear_23f4_'+bat.GetName()+".K"+str(k)+
                             ".M"+str(m)+".N"+str(n)+
                             ".TT"+str(t) for t in range(start_period,
                                         end_period+1)])
-    
-    #constraint 23i -- one lambda per BKNT - reconcile plus.
-    val = flatten([[1.0 for i in range(1,numBatParts+1)] for m in range(1,numSocParts+1)])+[-1.0]
-    for bat in batteries:
-        for k in range(1,tech_maxes[bat.GetName()]+1):
-             p.linear_constraints.add(
-                    lin_expr=[cplex.SparsePair(flatten(
-                            [[lambda_plus_var(bat,k,m,n,t) 
-                            for m in range(1,numSocParts+1)] 
-                            for n in range(1,numBatParts+1)]
-                            )+[B_plus_var(bat,k,t)],
-                            val) for t in range(start_period,
-                                    end_period+1)],
-                    senses=['E' for t in range(num_periods)], 
-                    rhs=scipy.zeros(num_periods), 
-                    names=['Linear_23i_'+bat.GetName()+".K"+str(k)+
-                        ".TT"+str(t) for t in range(start_period,
-                                    end_period+1)])       
-            
-    #constraint 23j -- one lambda per BKNT - reconcile minus.
-    for bat in batteries:
-        for k in range(1,tech_maxes[bat.GetName()]+1):
-             p.linear_constraints.add(
-                    lin_expr=[cplex.SparsePair(flatten(
-                            [[lambda_minus_var(bat,k,m,n,t) 
-                            for m in range(1,numSocParts+1)] 
-                            for n in range(1,numBatParts+1)]
-                            )+[B_minus_var(bat,k,t)],
-                            val) for t in range(start_period,
-                                    end_period+1)],
-                    senses=['E' for t in range(num_periods)], 
-                    rhs=scipy.zeros(num_periods), 
-                    names=['Linear_23j_'+bat.GetName()+".K"+str(k)+
-                        ".TT"+str(t) for t in range(start_period,
-                                    end_period+1)]) 
-    #                                
-    ##constraint 23g -- Z_plus linearization
+
+
+    ##constraint 25g -- Z_plus linearization
     for bat in batteries:
         for m in range(1,numSocParts+1):
             for n in range(1,numBatParts+1):
@@ -1435,11 +1225,11 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                                         end_period+1)],
                         senses=['G' for t in range(num_periods)], 
                         rhs=scipy.zeros(num_periods), 
-                        names=['Linear_23g_'+bat.GetName()+".K"+str(k)+
+                        names=['Linear_25g_'+bat.GetName()+".K"+str(k)+
                             ".N"+str(n)+
                             ".TT"+str(t) for t in range(start_period,
                                         end_period+1)])
-    ##constraint 23h-- Z_plus linearization
+    ##constraint 25h-- Z_plus linearization
     for bat in batteries:
         for m in range(1,numSocParts+1):
             for n in range(1,numBatParts+1):
@@ -1505,11 +1295,11 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                                         end_period+1)],
                         senses=['L' for t in range(num_periods)], 
                         rhs=scipy.zeros(num_periods), 
-                        names=['Linear_23i_'+bat.GetName()+".K"+str(k)+
+                        names=['Linear_25i_'+bat.GetName()+".K"+str(k)+
                             ".N"+str(n)+
                             ".TT"+str(t) for t in range(start_period,
                                         end_period+1)])
-    ##constraint 23j -- Z_plus linearization
+    ##constraint 25j -- Z_plus linearization
     for bat in batteries:
         for m in range(1,numSocParts+1):
             for n in range(1,numBatParts+1):
@@ -1540,11 +1330,11 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                                         end_period+1)],
                         senses=['L' for t in range(num_periods)], 
                         rhs=scipy.zeros(num_periods), 
-                        names=['Linear_23j_'+bat.GetName()+".K"+str(k)+
+                        names=['Linear_25j_'+bat.GetName()+".K"+str(k)+
                             ".N"+str(n)+
                             ".TT"+str(t) for t in range(start_period,
                                         end_period+1)])   
-    ##constraint 23k -- Z_minus linearization
+    ##constraint 25k -- Z_minus linearization
     for bat in batteries:
         for m in range(1,numSocParts+1):
             for n in range(1,numBatParts+1):
@@ -1575,11 +1365,11 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                                         end_period+1)],
                         senses=['G' for t in range(num_periods)], 
                         rhs=scipy.zeros(num_periods), 
-                        names=['Linear_23k_'+bat.GetName()+".K"+str(k)+
+                        names=['Linear_25k_'+bat.GetName()+".K"+str(k)+
                             ".N"+str(n)+
                             ".TT"+str(t) for t in range(start_period,
                                         end_period+1)])
-    ##constraint 23l-- Z_minus linearization
+    ##constraint 25l-- Z_minus linearization
     for bat in batteries:
         for m in range(1,numSocParts+1):
             for n in range(1,numBatParts+1):
@@ -1610,11 +1400,11 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                                         end_period+1)],
                         senses=['G' for t in range(num_periods)], 
                         rhs=scipy.zeros(num_periods),
-                        names=['Linear_23l_'+bat.GetName()+".K"+str(k)+
+                        names=['Linear_25l_'+bat.GetName()+".K"+str(k)+
                             ".N"+str(n)+
                             ".TT"+str(t) for t in range(start_period,
                                         end_period+1)])  
-    ##constraint 23m -- Z_minus linearization
+    ##constraint 25m -- Z_minus linearization
     for bat in batteries:
         for m in range(1,numSocParts+1):
             for n in range(1,numBatParts+1):
@@ -1645,11 +1435,11 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                                         end_period+1)],
                         senses=['L' for t in range(num_periods)], 
                         rhs=scipy.zeros(num_periods), 
-                        names=['Linear_23m_'+bat.GetName()+".K"+str(k)+
+                        names=['Linear_25m_'+bat.GetName()+".K"+str(k)+
                             ".N"+str(n)+
                             ".TT"+str(t) for t in range(start_period,
                                         end_period+1)])
-    ##constraint 23n-- Z_minus linearization
+    ##constraint 25n-- Z_minus linearization
     for bat in batteries:
         for m in range(1,numSocParts+1):
             for n in range(1,numBatParts+1):
@@ -1680,11 +1470,11 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                                         end_period+1)],
                         senses=['L' for t in range(num_periods)], 
                         rhs=scipy.zeros(num_periods), 
-                        names=['Linear_23n_'+bat.GetName()+".K"+str(k)+
+                        names=['Linear_25n_'+bat.GetName()+".K"+str(k)+
                             ".N"+str(n)+
                             ".TT"+str(t) for t in range(start_period,
                                         end_period+1)])   
-    #constraint 23o -- Z_minus <= soc_max * I_minus
+    #constraint 25o -- Z_minus <= soc_max * I_minus
     for bat in batteries:
         val = [1.0,-bat.GetMaxSOC()]  
         for k in range(1,tech_maxes[bat.GetName()]+1):
@@ -1696,10 +1486,10 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                                 end_period+1)],
                 senses=['L' for t in range(num_periods)], 
                 rhs=scipy.zeros(num_periods), 
-                names=['Linear_23o_'+bat.GetName()+".K"+str(k)+
+                names=['Linear_25o_'+bat.GetName()+".K"+str(k)+
                     ".TT"+str(t) for t in range(start_period,
                                 end_period+1)])    
-    #constraint 23p -- Z_plus <= soc_max * I_plus    
+    #constraint 25p -- Z_plus <= soc_max * I_plus    
     for bat in batteries:
         val = [1.0,-bat.GetMaxSOC()]  
         for k in range(1,tech_maxes[bat.GetName()]+1):
@@ -1711,7 +1501,7 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                                 end_period+1)],
                 senses=['L' for t in range(num_periods)], 
                 rhs=scipy.zeros(num_periods), 
-                names=['Linear_23p_'+bat.GetName()+".K"+str(k)+
+                names=['Linear_25p_'+bat.GetName()+".K"+str(k)+
                     ".TT"+str(t) for t in range(start_period,
                                 end_period+1)])             
                 
@@ -1742,46 +1532,13 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                 senses=['L'], 
                 rhs=[1], 
                 names=['CUT2'])   
-    #Constraint RESET_SOCa - fix SOC at beginning of period or restrict to purchased batteries
-    if start_period == 1: 
-        val = [1.0,-1.0*scalars["b_init"]]
-        sense = ['E']
-        ending = 'START_'
-    elif upper_bound:
-        val = [1.0,-1.0*boundary_soc]
-        sense = ['E']
-        ending = 'UB_'
-    else:
-        val = [1.0,-1.0]
-        sense = ['L']
-        ending = 'LB_'
-    for bat in batteries:
-        for k in range(1,tech_maxes[bat.GetName()]+1):
-            p.linear_constraints.add(
-                lin_expr=[cplex.SparsePair([soc_start_var(bat,k),W_var(bat,k)],
-                    val)],
-                senses=sense, 
-                rhs=[0], 
-                names=['Storage_inv_start_'+ending+bat.GetName()+".K"+str(k)])  
-    #Constraint RESET_SOCb - fix SOC at end of period
-    if upper_bound:
-        val = [1.0,-1.0*boundary_soc]
-        sense = ['E']
-        ending = 'UB_'
-    else:
-        val = [1.0,-1.0]
-        sense = ['L']
-        ending = 'LB_' 
-    for bat in batteries:
-        for k in range(1,tech_maxes[bat.GetName()]+1):
-            p.linear_constraints.add(
-                lin_expr=[cplex.SparsePair([soc_end_var(bat,k),W_var(bat,k)],
-                    val)],
-                senses=sense, 
-                rhs=[0], 
-                names=['RESET_SOC_end_'+ending+bat.GetName()+".K"+str(k)]) 
+
+            
+    
+    
+    
                                 
-    #Constraint RESET_POINTS_EQ - start_soc and end_soc must be equal
+    #Valid inequality: constraint RESET_POINTS_EQ - start_soc and end_soc must be equal
     if start_period != 1:
         val = [1.0,-1.0]
         sense = ['E']
@@ -1793,43 +1550,6 @@ def SolvePartition(inputs, scenario, start_period, end_period,
                     senses=sense, 
                     rhs=[0], 
                     names=['START_END_SOC_EQ_'+bat.GetName()+".K"+str(k)])
-    
-    #Constraint END_SOCa - end_soc = b_soc_(end_period) 
-    val = [1.0,-1.0,1.0]
-    sense = ['L']
-    for bat in batteries:
-        for k in range(1,tech_maxes[bat.GetName()]+1):
-            ind = [soc_end_var(bat,k),B_soc_var(bat,k,end_period),W_var(bat,k)]
-            p.linear_constraints.add(
-                lin_expr=[cplex.SparsePair(ind,val)],
-                senses=sense, 
-                rhs=[1], 
-                names=['END_SOCa_'+ending+bat.GetName()+".K"+str(k)]) 
-    #Constraint END_SOCb - end_soc = b_soc_(end_period)
-    val = [1.0,-1.0,-1.0]
-    sense = ['G']
-    for bat in batteries:
-        for k in range(1,tech_maxes[bat.GetName()]+1):
-            ind = [soc_end_var(bat,k),B_soc_var(bat,k,end_period),W_var(bat,k)]
-            p.linear_constraints.add(
-                lin_expr=[cplex.SparsePair(ind,val)],
-                senses=sense, 
-                rhs=[-1], 
-                names=['END_SOCb_'+ending+bat.GetName()+".K"+str(k)])
-    
-    #constraint INVENTORY -- tracks ending storage inventory (which is the same
-    #as starting inventory)
-    ind = ['battery_inv']
-    val = [-1.0]          
-    for bat in batteries:
-        for k in range(1,tech_maxes[bat.GetName()]+1):
-            ind.append(soc_end_var(bat,k))
-            val.append(bat.GetReferenceCapacity())
-    p.linear_constraints.add(
-        lin_expr=[cplex.SparsePair(ind,val)],
-        senses=['E'], 
-        rhs=[0], 
-        names=['INVENTORY'])
     
     #Constraint GEN_CAPACITY - set minimum generator capacity
     ind = []
@@ -1846,27 +1566,6 @@ def SolvePartition(inputs, scenario, start_period, end_period,
         names = ['GEN_MIN_CAP']
         )
         
-    #Fix purchase decision if running the upper bound formulation
-    if upper_bound:
-        inds = []
-        vals = []
-        for tech in technologies: 
-            if tech.GetType() != "PVArray":
-                for k in range(1,tech_maxes[tech.GetName()]+1):
-                    inds.append(W_var(tech,k))
-                    if tech.GetName() in W_init[scenario].keys(): 
-                        if "K"+str(k) in W_init[scenario][tech.GetName()].keys():
-                            vals.append(W_init[scenario][tech.GetName()]["K"+str(k)])
-                        else: vals.append(0)
-                    else: vals.append(0)
-            else: 
-                inds.append(X_var(tech))
-                if tech.GetName() in X_init[scenario].keys():
-                    vals.append(X_init[scenario][tech.GetName()])
-                else: vals.append(0) 
-        #print inds, vals
-        p.variables.set_upper_bounds(zip(inds,vals))
-        p.variables.set_lower_bounds(zip(inds,vals))  
     
     #If there is a candidate design decision given as input, we test the 
     #feasibility by fixing the solution and observing the CPLEX output.
@@ -2477,60 +2176,13 @@ if __name__ == "__main__":
     if len(sys.argv) > 1: scenario = sys.argv[1]
     else: scenario = "ll1"
     clock = time.time()
-    #print "Scenario:",scenario
     
-    #QUICK TEST
-    #scen_numbers = range(1,15)
-    #scenario_names = ["ll"+str(x) for x in scen_numbers]
-    #f = open("revised_method.csv","w")
-    #f.write("scen,lb,time\n")
-    #for scenario in scenario_names:
-    #    print scenario
-    #    clock = time.time()
-    #    lb,obj = RunLinearLBDay(scenario,num_days = 1)
-    #    elapsed = time.time()-clock
-    #    f.write(scenario+","+str(lb)+","+str(elapsed)+"\n")
-    #    print "SCEN:",scenario,"LB:",lb,"TIME:",elapsed
-    #f.close()
-    
-    #Solve whole problem
+    #Solve day-long problem as a test
     lb,obj = RunLinearLBDay(scenario, lambs=[0.0],num_days=1, probSize=24,
         batPartsPlus=[0,0.25,0.5,0.75,1.0],batPartsMinus=[0,0.25,0.5,0.75,1.0],
         design_mults=[(0,0)]*1,amortize_on_demand = True, IFS=None, mincap=0,
         reslim=60, socParts=[0.0,0.5,1.0],
         output=True)
     print (scenario)
-    
-    #print "SUBGRADIENT ATTEMPT"
-    #lb,obj,gap,iters = RunLBSubgradient(scenario,num_days=365,probSize=24,itermax=30,tol=0.05,n=3,ubCheck=5)
-    
-    #num_days = 1
-    #probSize = 24
-    #print "Grabbing all upper bounds."
-    #scen_numbers = range(12,13)
-    #scenario_names = ["ll"+str(x) for x in scen_numbers]
-    ##output_leads = [os.environ['WORK']+"/EEOMC_REPO/HEURISTIC/ll"+str(x)+"/" for x in scen_numbers]
-    #output_leads = ["sol/"]
-    #for i in range(len(scen_numbers)):
-    #    obj,sols = RunParallelUBDay(scenario_names[i],num_days=num_days,probSize=probSize)
-    #    print "scenario",scenario_names[i]," UB completed."
-    #    obj,sol_lb = RunParallelLBDay(scenario_names[i],num_days=num_days,probSize=probSize,IFS=sols)
-    #    #print "obj:",obj
-    #    OutputAllSols(sols, output_dir = output_leads[i], scenario_name = scenario_names[i])
-    #    print "LB",scenario_names[i],"completed."
-    #elapsed = time.time() - clock
-    #print "TOTAL TIME:", elapsed
-    
-    ######PRINTING OUTPUT######
-    #outfile = open("CurPartModel_R"+scenario[2:]+".csv",'w')
-    #outfile.write("Scenario,LB,UB,gap,iters,time\n")
-    #outfile.write(scenario+","+str(lb)+","+str(obj)+","+str(gap)+","+str(iters)+","+str(elapsed)+","+"\n")
-    #
-    #outfile.close()
-    #print "Solving Whole Problem:"
-    #clock = time.time()
-    #RunWholeProblem("ll12")
-    #elapsed = time.time() - clock
-    #print "Completed in "+str(elapsed)+" second
     
     
