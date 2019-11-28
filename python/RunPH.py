@@ -12,15 +12,9 @@ import Partition_Univariate
 import Partition_Univariate_G
 import Partition_Bivariate
 import Partition_Nagarajan
-#import Stoch_Linear_ph
-import Stoch_Partition_Current_ph
 import Min_capacity_model
-import Stoch_Partition_Bivar
-import Stoch_Partition_Bivar_Cont
-import Stoch_Partition_Naga
 import scipy
 import MIPtoMINLP
-import os
 import time
 
 
@@ -45,39 +39,7 @@ def GetCurrentParts(sols,direction="I_minus",numParts=5):
     parts[0] = 0.0
     parts[-1] = 1.0
     print (direction, parts)
-    return parts
-
-
-#def RunNonuniformPartitionUB(scenario,sols,num_days=365,probSize=24,numParts=5):
-#    """runs a linear model for a given purchase decision, uses the results
-#    to get quantiles on battery operation, and then uses these quantiles to
-#    serve as boundaries in a nonuniform partition.
-#    
-#    scenario - scenario indicator
-#    sol - candidate solution (e.g,. a week or day long problem)
-#    num_days - number of subproblems
-#    probSize - size of an individual subproblem, in time periods (hours)
-#    retvals - objective value; CPLEX solutions; battery quantiles"""
-#    Stoch_Partition_Current_ph.OutputAllSols([sols[0]],output_dir = "./../sol_files/"+scenario+"/", scenario_name = scenario)
-#    #try: 
-##    obj = sum([sol["obj"] for sol in sols])
-#    batPartsPlus = GetCurrentParts(sols,direction="I_plus",numParts=numParts)
-#    batPartsMinus = GetCurrentParts(sols,direction="I_minus",numParts=numParts)
-#    #batPartsPlus = [0.05*x for x in range(21)]
-#    #batPartsMinus = [0.05*x for x in range(21)] 
-#    print (batPartsPlus,batPartsMinus)
-#    obj_ub,sols_ub,frac_over = Stoch_Partition_Current_ph.RunParallelUBDay(scenario,
-#            num_days=num_days,
-#            probSize=probSize,
-#            batPartsPlus=batPartsPlus,
-#            batPartsMinus=batPartsMinus)
-#    print ("OBJ-Part",obj_ub)
-#    if obj_ub < scipy.infty:
-#        return obj_ub,sols_ub,frac_over,batPartsPlus,batPartsMinus
-#    else:
-#        return scipy.infty,sols,[0.0,0.25,0.5,0.75,1.0],[0.0,0.25,0.5,0.75,1.0]
-#    #except KeyError:
-#    #    return scipy.infty,{},[],[]       
+    return parts 
     
 def GetMinCap(scenario,lambs,design_mults,num_days=365,probSize=24,bat_parts=[0.0,1.0]):
     lb,sol_lb = Min_capacity_model.RunParallelLBDay(scenario,
@@ -93,27 +55,33 @@ def RunPH(scenario,num_days=365,probSize=24,itermax=40,tol=0.05,n=3,ubCheck=5,
         max_filename = "./../inputs/Opt_Model_J_MAX.csv",
         pv_spec_filename = "./../inputs/Opt_Model_PV_Inputs.csv",
         lbFind = 5,numBatParts=5, numSocParts=5, MINLP=True, nonuniform_part=False, findgen=True,
-        timeLimit = 3600, solsToCheck=10, method = "ourp"):
+        timeLimit = 3600, solsToCheck=10, method = "univariate"):
     """Runs the subgradient algorithm for our model.
     scenario - scenario number/location
     num_days - number of subproblems to solve 
     probSize - size of single subproblem in time periods (e.g., hours)
-    itermax - stopping criterion for algorithm: number of iterations of subgradient
+    itermax - stopping criterion for algorithm: number of iterations of 
+            progressive hedging
     tol - soptting criterion: optimality gap
     n - number of iterations before halving scalar step size multiplier
-    ubCheck - number of iterations at which we attempt to find a new upper bound
+    ubCheck - number of iterations at which we attempt to find a new upper 
+            bound
     tech_filename - technology spec sheet location
     pv_spec_filename - pv systems specs file location
-    lbFind - # of iterations before finding a lower bound (removing proximal term)
+    lbFind - # of iterations before finding a lower bound (removing proximal 
+            term)
     numBatParts -- number of current subregions for current variable
-    numSocParts -- number of current subregions for battery state-of-charge variable
+    numSocParts -- number of current subregions for battery state-of-charge 
+            variable
     MINLP -- determines whether or not an MINLP gap is sought
     nonuniform_part -- calculates a nonuniform partitioning scheme if True
     findgen -- Establishes a minimim generator capacity if True (used for 
                     generating a constraint in day-long subproblems)
     timeLimit -- time-based stopping criterion for total algorithm
+    solsToCheck -- number of UB runs to find solutions
+    method -- partititioning model selected for approximating bilinear 
+            relationships
     """
-    import os
     iterfile = open("iter-method-"+method+"NOVI-scen"+scenario+"-m"+str(numSocParts)+"-n"+str(numBatParts)+".csv",'a')
     iterfile.write("iteration,LB,time\n")
     iterfile.close()
@@ -144,17 +112,7 @@ def RunPH(scenario,num_days=365,probSize=24,itermax=40,tol=0.05,n=3,ubCheck=5,
     obj = scipy.infty
     ub_sols = []
     sol_ub = None
-#    if nonuniform_part:
-#        lb,sol_lb,frac_over = Stoch_Partition_Current_ph.RunParallelLBDay(scenario,lambs=lambs,
-#                design_mults=design_mults,num_days=num_days,probSize=probSize,
-#                batPartsPlus=[0.0,1.0],batPartsMinus=[0.0,1.0],mincap=mincap)
-#        bat_parts_plus = GetCurrentParts(sol_lb,"I_plus",numParts) 
-#        bat_parts_minus = GetCurrentParts(sol_lb,"I_minus",numParts) 
-    #print 'iter 0 lb',lb
-    #print 'sols lb:'
-    #for sol in sol_lb:
-    #    print sol["W"],sol["X"]
-    #Stoch_Partition_Current_ph.outputSolsLambs(scenario,sol_lb,0,False)
+
     incumbent=1e-6
     gap = (obj-incumbent)/incumbent
     k=0 #iteration number
@@ -164,46 +122,22 @@ def RunPH(scenario,num_days=365,probSize=24,itermax=40,tol=0.05,n=3,ubCheck=5,
     
     elapsed = time.time()-clock
     while gap > tol and k <= itermax and elapsed < timeLimit:
-        #print "updating lambda"
-        #print 'lambs:',lambs
-        #del lb
-        #del sol_lb 
-        if method == "ourp":
-            lb,sol_lb,frac_over = Stoch_Partition_Current_ph.RunParallelLBDay(scenario,
-                lambs=lambs,design_mults=design_mults,num_days=num_days,
-                probSize=probSize,batPartsPlus=bat_parts_plus,
-                batPartsMinus=bat_parts_minus,mincap=mincap,socParts=socParts)
-        elif method == "bivar":
-            lb,sol_lb,frac_over = Stoch_Partition_Bivar.RunParallelLBDay(scenario,
-                lambs=lambs,design_mults=design_mults,num_days=num_days,
-                probSize=probSize,batPartsPlus=bat_parts_plus,
-                batPartsMinus=bat_parts_minus,mincap=mincap,socParts=socParts)
-        elif method == "bivar_cont":
-            lb,sol_lb,frac_over = Stoch_Partition_Bivar_Cont.RunParallelLBDay(scenario,
-                lambs=lambs,design_mults=design_mults,num_days=num_days,
-                probSize=probSize,batPartsPlus=bat_parts_plus,
-                batPartsMinus=bat_parts_minus,mincap=mincap,socParts=socParts)
-        elif method == "naga":
-            lb,sol_lb,frac_over = Stoch_Partition_Naga.RunParallelLBDay(scenario,
-                lambs=lambs,design_mults=design_mults,num_days=num_days,
-                probSize=probSize,batPartsPlus=bat_parts_plus,
-                batPartsMinus=bat_parts_minus,mincap=mincap,socParts=socParts)
-        elif method == "nagarajan":
+        if method == "nagarajan":  #Model (N)
             lb,sol_lb,frac_over = Partition_Nagarajan.RunParallelLBDay(scenario,
                 lambs=lambs,design_mults=design_mults,num_days=num_days,
                 probSize=probSize,batPartsPlus=bat_parts_plus,
                 batPartsMinus=bat_parts_minus,mincap=mincap,socParts=socParts)
-        elif method == "univariate":
+        elif method == "univariate":  #Model (U)
             lb,sol_lb,frac_over = Partition_Univariate.RunParallelLBDay(scenario,
                 lambs=lambs,design_mults=design_mults,num_days=num_days,
                 probSize=probSize,batPartsPlus=bat_parts_plus,
                 batPartsMinus=bat_parts_minus,mincap=mincap)
-        elif method == "gounaris":
+        elif method == "gounaris":    #Model (G)
             lb,sol_lb,frac_over = Partition_Univariate_G.RunParallelLBDay(scenario,
                 lambs=lambs,design_mults=design_mults,num_days=num_days,
                 probSize=probSize,batPartsPlus=bat_parts_plus,
                 batPartsMinus=bat_parts_minus,mincap=mincap)
-        elif method == "bivariate":
+        elif method == "bivariate":    #Model (U), bivariate implementation
             lb,sol_lb,frac_over = Partition_Bivariate.RunParallelLBDay(scenario,
                 lambs=lambs,design_mults=design_mults,num_days=num_days,
                 probSize=probSize,batPartsPlus=bat_parts_plus,
@@ -213,7 +147,6 @@ def RunPH(scenario,num_days=365,probSize=24,itermax=40,tol=0.05,n=3,ubCheck=5,
             return -1
         elapsed = time.time() - clock
         frac_overs.append(frac_over)
-#        Stoch_Partition_Current_ph.outputSolsLambs(scenario,sol_lb,k,False)
         if nonuniform_part:
             bat_parts_plus = GetCurrentParts(sol_lb,"I_plus",numBatParts) 
             bat_parts_minus = GetCurrentParts(sol_lb,"I_minus",numBatParts) 
@@ -226,9 +159,9 @@ def RunPH(scenario,num_days=365,probSize=24,itermax=40,tol=0.05,n=3,ubCheck=5,
             gap = (obj-incumbent)/incumbent
             print ('updated gap:', gap)
             elapsed = time.time() - clock
-            iterfile = open("iter-method-"+method+"NOVI-scen"+scenario+"-m"+str(numSocParts)+"-n"+str(numBatParts)+".csv",'a')
+            iterfile = open("iterations-method-"+method+"-scen"+scenario+"-m"+str(numSocParts)+"-n"+str(numBatParts)+".csv",'a')
             iterfile.write(str(elapsed)+","+str(incumbent)+","+str(obj)+","+str(gap)+"\n")
-            iterfile.close()  
+#            iterfile.close()  
         if k % ubCheck == 0:
             mean_soc = scipy.average([s["B_soc_end"] for s in sol_lb])
             mean_soc = 0.5
@@ -246,21 +179,8 @@ def RunPH(scenario,num_days=365,probSize=24,itermax=40,tol=0.05,n=3,ubCheck=5,
                 if str(sol["W"])+str(sol["X"]) not in ub_sols:
                     solschecked += 1
                     print ("attempting new candidate.", str(sol["W"])+str(sol["X"]))
-                    #Stoch_Partition_Current_ph.OutputDesign([sol],output_dir = scenario+"/", scenario_name = scenario)
-                    Stoch_Partition_Current_ph.OutputAllSols([sol],output_dir = IFS_dir, scenario_name = scenario)
-                    if method == "ourp":
-                        objU,solU,frac_over = Stoch_Partition_Current_ph.RunParallelUBDay(scenario,num_days=num_days,probSize=probSize,batPartsPlus=bat_parts_plus,
-                            batPartsMinus=bat_parts_minus, boundary_soc=mean_soc, socParts=socParts)
-                    elif method == "bivar":
-                        objU,solU,frac_over = Stoch_Partition_Bivar.RunParallelUBDay(scenario,num_days=num_days,probSize=probSize,batPartsPlus=bat_parts_plus,
-                            batPartsMinus=bat_parts_minus, boundary_soc=mean_soc, socParts=socParts)
-                    elif method == "bivar_cont":
-                        objU,solU,frac_over = Stoch_Partition_Bivar_Cont.RunParallelUBDay(scenario,num_days=num_days,probSize=probSize,batPartsPlus=bat_parts_plus,
-                            batPartsMinus=bat_parts_minus, boundary_soc=mean_soc, socParts=socParts)
-                    elif method == "naga":
-                        objU,solU,frac_over = Stoch_Partition_Naga.RunParallelUBDay(scenario,num_days=num_days,probSize=probSize,batPartsPlus=bat_parts_plus,
-                            batPartsMinus=bat_parts_minus, boundary_soc=mean_soc, socParts=socParts) 
-                    elif method == "nagarajan":
+                    Partition_Univariate.OutputAllSols([sol],output_dir = IFS_dir, scenario_name = scenario)
+                    if method == "nagarajan":
                         objU,solU,frac_over = Partition_Nagarajan.RunParallelUBDay(scenario,num_days=num_days,probSize=probSize,batPartsPlus=bat_parts_plus,
                             batPartsMinus=bat_parts_minus, boundary_soc=mean_soc, socParts=socParts)     
                     elif method == "univariate":
@@ -277,7 +197,7 @@ def RunPH(scenario,num_days=365,probSize=24,itermax=40,tol=0.05,n=3,ubCheck=5,
                     frac_overs.append(frac_over)
                     if objU < obj:
                         if MINLP:
-                            Stoch_Partition_Current_ph.OutputAllSols(solU,IFS_dir,scenario)
+                            Partition_Univariate.OutputAllSols(solU,IFS_dir,scenario)
                             MINLP = MIPtoMINLP.MINLPSolution(inputs_dir,IFS_dir,scenario,time_horizon=num_days*probSize)
                             try: 
                                 MINLP.RunSolution(num_intervals=num_days)
@@ -294,8 +214,7 @@ def RunPH(scenario,num_days=365,probSize=24,itermax=40,tol=0.05,n=3,ubCheck=5,
                         gap = (obj-incumbent)/incumbent
                         print ('updated gap:', gap)
                         elapsed = time.time() - clock
-#                        iterfile = open("iter-method-"+method+"NOVI-scen"+scenario+"-m"+str(numSocParts)+"-n"+str(numBatParts)+".csv",'a')
-#                        iterfile.write(str(elapsed)+","+str(incumbent)+","+str(obj)+","+str(gap)+"\n")
+                        iterfile.write(str(elapsed)+","+str(incumbent)+","+str(obj)+","+str(gap)+"\n")
 #                        iterfile.close()  
                         if gap < tol:
                             return incumbent,obj,gap,(k),scipy.average(frac_overs)
@@ -304,30 +223,33 @@ def RunPH(scenario,num_days=365,probSize=24,itermax=40,tol=0.05,n=3,ubCheck=5,
 #                    scenario,num_days=num_days,
 #                    probSize=probSize,batPartsPlus=bat_parts_plus,
 #                    batPartsMinus=bat_parts_minus, MINLP=MINLP)    
+        iterfile.close()
         k += 1
         lambs = UpdateLambdaPH(lambs,sol_lb,rho_bat)
         design_mults, design_objs, added_obj = UpdateDesignMults(design_mults,
                 sol_lb, rho, proximal_term=False)
-#    Stoch_Linear_ph.OutputAllSols(sol_ub,output_dir = scenario+"/", scenario_name = scenario)
     return incumbent,obj,gap,(k-1),scipy.average(frac_overs)
     
 def FindBestSOC(sol_ub, obj, gap, incumbent, scenario,num_days=365,
         probSize=24,batPartsPlus=[0,1], batPartsMinus=[0,1],
         tol=0.05, MINLP=False):
-    "uses bisection on boundary SOC to obtain new optimal solution."""
+    """
+    uses bisection on battery SOC at boundary points to obtain new optimal 
+    solution.
+    """
     soc_mid = 0.5
-    Stoch_Partition_Current_ph.OutputAllSols([sol_ub[0]],output_dir = "./../sol_files/"+scenario+"/", scenario_name = scenario)
-    o_mid,sol_mid,frac_over = Stoch_Partition_Current_ph.RunParallelUBDay(scenario,
+    Partition_Univariate.OutputAllSols([sol_ub[0]],output_dir = "./../sol_files/"+scenario+"/", scenario_name = scenario)
+    o_mid,sol_mid,frac_over = Partition_Univariate.RunParallelUBDay(scenario,
         num_days=num_days,probSize=probSize,batPartsPlus=batPartsPlus,
         batPartsMinus=batPartsMinus, boundary_soc=soc_mid)
     dist = 0.25
     while dist > tol:
         soc_hi = soc_mid + dist
         soc_lo = soc_mid - dist
-        o_hi,s_hi,frac_over = Stoch_Partition_Current_ph.RunParallelUBDay(scenario,
+        o_hi,s_hi,frac_over = Partition_Univariate.RunParallelUBDay(scenario,
             num_days=num_days,probSize=probSize,batPartsPlus=batPartsPlus,
             batPartsMinus=batPartsMinus, boundary_soc=soc_hi)
-        o_lo,s_lo,frac_over = Stoch_Partition_Current_ph.RunParallelUBDay(scenario,
+        o_lo,s_lo,frac_over = Partition_Univariate.RunParallelUBDay(scenario,
             num_days=num_days,probSize=probSize,batPartsPlus=batPartsPlus,
             batPartsMinus=batPartsMinus, boundary_soc=soc_lo)
         if o_lo < o_hi and o_lo < o_mid:
@@ -340,7 +262,7 @@ def FindBestSOC(sol_ub, obj, gap, incumbent, scenario,num_days=365,
             sol_mid = s_hi
         dist /= 2
     if MINLP:
-        Stoch_Partition_Current_ph.OutputAllSols(sol_mid,output_dir = scenario+"/", scenario_name = scenario)
+        Partition_Univariate.OutputAllSols(sol_mid,output_dir = scenario+"/", scenario_name = scenario)
         MINLP_sol = MIPtoMINLP.MINLPSolution(
             "./../inputs/",
             "./../sol_files/"+scenario+"/",
@@ -561,36 +483,49 @@ def GetLinearSol(scenario):
             
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) > 1: scenario = sys.argv[1]
-    else: scenario = "ll1"
-    if len(sys.argv) > 3: numBatParts = int(sys.argv[3])
-    else: numBatParts = 4
+    if len(sys.argv) > 1: 
+        scenario = sys.argv[1]
+        print ("Scenario selected: ", scenario)
+    else: 
+        print ("No scenario argument provided; using ll1.")
+        scenario = "ll1"
+    if len(sys.argv) > 3: 
+        numBatParts = int(sys.argv[3])
+        print ("Current partitions selected: ", numBatParts)
+    else: 
+        print ("No argument for current partitions provided; using default of 4.")
+        numBatParts = 4
     if len(sys.argv) > 2: numSocParts = int(sys.argv[2])
-    else: numSocParts = 1
-    if len(sys.argv) > 4: method = sys.argv[4]
-    else: method = "ourp"
+    else: 
+        print ("No argument for SOC partitions provided; using default of 1.")
+        numSocParts = 1
+    if len(sys.argv) > 4: 
+        method = sys.argv[4]
+        print ("partitioning model selected: ", method)
+    else: 
+        print ("No argument for SOC partitions provided; using 'univariate' or model (U)")
+        method = "univariate"
+    if len(sys.argv) > 5: 
+        if sys.argv[5] == 'minlp':
+            MINLP = True
+        else: 
+            print ("argument for MINLP solve not recognized; solving MILP only.")
+            MINLP = False
+    else: 
+        print ("no argumemt provided for MINLP solve; solving MILP only.")
     print ("scenario:",scenario)
     tech_filename = "./../inputs/Opt_Model_J_inputs.csv"
     max_filename = "./../inputs/Opt_Model_J_MAX.csv"
     pv_spec_filename = "./../inputs/Opt_Model_PV_Inputs.csv"
-    #tech_filename = "./../inputs/Opt_Model_J_inputs.csv"
-    #max_filename = "./../inputs/Opt_Model_J_MAX.csv"
-    #pv_spec_filename = "./../inputs/Opt_Model_PV_Inputs.csv"
-    #design_mults =  GenerateDesignMultipliers(scenario="ll1",num_subproblems = 3)
-    #print design_mults
     for method in [
-            "nagarajan",
+            method
  #           "gounaris",
  #           "univariate",
  #           "bivariate",
-#            "naga",
-#            "ourp",
-#            "bivar",
-#            "bivar_cont",
             ]:
-        outfile = open("results_"+method+"novi_m"+str(numSocParts)+"_n"+str(numBatParts)+"_"+scenario+".csv","w") 
+        outfile = open("results_method-"+method+"_m"+str(numSocParts)+"_n"+str(numBatParts)+"_"+scenario+".csv","w") 
         start = time.time()
-        lb,obj,gap,iters,frac_over = RunPH(scenario,num_days=365,probSize=24,
+        lb,obj,gap,iters,frac_over,sol_ub = RunPH(scenario,num_days=365,probSize=24,
                 itermax=1000,tol=0.25,n=500,ubCheck=1,
                 tech_filename = tech_filename,
                 max_filename = max_filename,
@@ -602,7 +537,7 @@ if __name__ == "__main__":
         elapsed = (time.time() - start) #measure time elapsed in minutes
         outfile.write("Scenario,LB,UB,gap,iters,time,fracOverLim\n")
         outfile.write(scenario+","+str(lb)+","+str(obj)+","+str(gap)+","+str(iters)+","+str(elapsed)+","+str(frac_over)+","+"\n")
-        print("\n\nCompleted PH. Results:")
+        print("\n\nTerminated. Results:")
         print("method: ",method)
         print("scenario: ",scenario)
         print("lb: ",lb)
@@ -611,32 +546,4 @@ if __name__ == "__main__":
         print("total time:",elapsed)
         print("\n\n\n")
     
-#    start = time.time()
-#    lb,obj,gap,iters,frac_over = RunPH(scenario,num_days=365,probSize=24,
-#            itermax=100,tol=0.05,n=500,ubCheck=3,
-#            tech_filename = tech_filename,
-#            max_filename = max_filename,
-#            pv_spec_filename = pv_spec_filename,
-#            lbFind=1, numParts=numParts, MINLP=True,nonuniform_part=False,
-#            findgen=True, timeLimit=3600, solsToCheck=20
-#            )
-#    #
-#    elapsed = (time.time() - start) #measure time elapsed in minutes
-##    outfile.write("Scenario,LB,UB,gap,iters,time,fracOverLim\n")
-#    outfile.write("MINLP"+scenario+","+str(lb)+","+str(obj)+","+str(gap)+","+str(iters)+","+str(elapsed)+","+str(frac_over)+","+"\n")
-#    print("total time-MINLP:",elapsed)
-#    start = time.time()
-#    lb,obj,gap,iters,frac_over = RunPH(scenario,num_days=365,probSize=24,
-#            itermax=100,tol=0.05,n=500,ubCheck=3,
-#            tech_filename = tech_filename,
-#            max_filename = max_filename,
-#            pv_spec_filename = pv_spec_filename,
-#            lbFind=1, numParts=numParts, MINLP=True,nonuniform_part=False,
-#            findgen=False, timeLimit=7200, solsToCheck=20
-#            )
-#    #
-#    elapsed = (time.time() - start) #measure time elapsed in minutes
-##    outfile.write("Scenario,LB,UB,gap,iters,time,fracOverLim\n")
-#    outfile.write("MINLPnoGen"+scenario+","+str(lb)+","+str(obj)+","+str(gap)+","+str(iters)+","+str(elapsed)+","+str(frac_over)+","+"\n")
-#    print("total time-MINLP no gen:",elapsed)
-    
+   
