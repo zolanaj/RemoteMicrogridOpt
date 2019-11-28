@@ -14,7 +14,7 @@ import Partition_Bivariate
 import Partition_Nagarajan
 #import Stoch_Linear_ph
 import Stoch_Partition_Current_ph
-import Stoch_Partition_Current_mincap
+import Min_capacity_model
 import Stoch_Partition_Bivar
 import Stoch_Partition_Bivar_Cont
 import Stoch_Partition_Naga
@@ -80,7 +80,7 @@ def GetCurrentParts(sols,direction="I_minus",numParts=5):
 #    #    return scipy.infty,{},[],[]       
     
 def GetMinCap(scenario,lambs,design_mults,num_days=365,probSize=24,bat_parts=[0.0,1.0]):
-    lb,sol_lb = Stoch_Partition_Current_mincap.RunParallelLBDay(scenario,
+    lb,sol_lb = Min_capacity_model.RunParallelLBDay(scenario,
             lambs=lambs,
             design_mults=design_mults,num_days=num_days,probSize=probSize,
             batPartsPlus=bat_parts,batPartsMinus=bat_parts)
@@ -580,9 +580,9 @@ if __name__ == "__main__":
     #print design_mults
     for method in [
             "nagarajan",
-            "gounaris",
-            "univariate",
-            "bivariate",
+ #           "gounaris",
+ #           "univariate",
+ #           "bivariate",
 #            "naga",
 #            "ourp",
 #            "bivar",
