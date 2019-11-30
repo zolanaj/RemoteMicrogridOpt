@@ -38,7 +38,7 @@ def GetCurrentParts(sols,direction="I_minus",numParts=5):
     parts = scipy.array([sortedCurrents[i] for i in indices])
     parts[0] = 0.0
     parts[-1] = 1.0
-    print (direction, parts)
+#    print (direction, parts)
     return parts 
     
 def GetMinCap(scenario,lambs,design_mults,num_days=365,probSize=24,bat_parts=[0.0,1.0]):
@@ -150,14 +150,14 @@ def RunPH(scenario,num_days=365,probSize=24,itermax=40,tol=0.05,n=3,ubCheck=5,
         if nonuniform_part:
             bat_parts_plus = GetCurrentParts(sol_lb,"I_plus",numBatParts) 
             bat_parts_minus = GetCurrentParts(sol_lb,"I_minus",numBatParts) 
-        print ("Bat parts plus:",bat_parts_plus)
-        print ("Bat parts minus:",bat_parts_minus)
+#        print ("Bat parts plus:",bat_parts_plus)
+#        print ("Bat parts minus:",bat_parts_minus)
         #lb += added_obj
-        print ('iter',k, "lb:",lb)
+#        print ('iter',k, "lb:",lb)
         if lb > incumbent:
             incumbent = lb*1.0
             gap = (obj-incumbent)/incumbent
-            print ('updated gap:', gap)
+#            print ('updated gap:', gap)
             elapsed = time.time() - clock
             iterfile = open("iterations-method-"+method+"-scen"+scenario+"-m"+str(numSocParts)+"-n"+str(numBatParts)+".csv",'a')
             iterfile.write(str(elapsed)+","+str(incumbent)+","+str(obj)+","+str(gap)+"\n")
@@ -165,7 +165,7 @@ def RunPH(scenario,num_days=365,probSize=24,itermax=40,tol=0.05,n=3,ubCheck=5,
         if k % ubCheck == 0:
             mean_soc = scipy.average([s["B_soc_end"] for s in sol_lb])
             mean_soc = 0.5
-            print ('mean_soc',mean_soc)
+#            print ('mean_soc',mean_soc)
             solschecked=0
             for sol in sol_lb: 
                 elapsed = time.time()-clock
@@ -178,7 +178,7 @@ def RunPH(scenario,num_days=365,probSize=24,itermax=40,tol=0.05,n=3,ubCheck=5,
                         ) #round to nearest 5 panels
                 if str(sol["W"])+str(sol["X"]) not in ub_sols:
                     solschecked += 1
-                    print ("attempting new candidate.", str(sol["W"])+str(sol["X"]))
+#                    print ("attempting new candidate.", str(sol["W"])+str(sol["X"]))
                     Partition_Univariate.OutputAllSols([sol],output_dir = IFS_dir, scenario_name = scenario)
                     if method == "nagarajan":
                         objU,solU,frac_over = Partition_Nagarajan.RunParallelUBDay(scenario,num_days=num_days,probSize=probSize,batPartsPlus=bat_parts_plus,
@@ -192,7 +192,7 @@ def RunPH(scenario,num_days=365,probSize=24,itermax=40,tol=0.05,n=3,ubCheck=5,
                     elif method == "bivariate":
                         objU,solU,frac_over = Partition_Bivariate.RunParallelUBDay(scenario,num_days=num_days,probSize=probSize,batPartsPlus=bat_parts_plus,
                             batPartsMinus=bat_parts_minus, boundary_soc=mean_soc, socParts=socParts) 
-                    print ("SOL MIP UB",objU)
+#                    print ("SOL MIP UB",objU)
                     ub_sols.append(str(sol["W"])+str(sol["X"]))
                     frac_overs.append(frac_over)
                     if objU < obj:
@@ -205,14 +205,14 @@ def RunPH(scenario,num_days=365,probSize=24,itermax=40,tol=0.05,n=3,ubCheck=5,
                             except AttributeError:
                                 objU *= 1.0
                             except AssertionError:
-                                print ("error in code. aborted solution.")
+#                                print ("error in code. aborted solution.")
                                 objU = scipy.infty
                     if objU <  obj:
-                        print ("new incumbent upper bound found. obj:",objU)
+#                        print ("new incumbent upper bound found. obj:",objU)
                         obj = objU
                         sol_ub = solU
                         gap = (obj-incumbent)/incumbent
-                        print ('updated gap:', gap)
+#                        print ('updated gap:', gap)
                         elapsed = time.time() - clock
                         iterfile.write(str(elapsed)+","+str(incumbent)+","+str(obj)+","+str(gap)+"\n")
 #                        iterfile.close()  
@@ -517,33 +517,27 @@ if __name__ == "__main__":
     tech_filename = "./../inputs/Opt_Model_J_inputs.csv"
     max_filename = "./../inputs/Opt_Model_J_MAX.csv"
     pv_spec_filename = "./../inputs/Opt_Model_PV_Inputs.csv"
-    for method in [
-            method
- #           "gounaris",
- #           "univariate",
- #           "bivariate",
-            ]:
-        outfile = open("results_method-"+method+"_m"+str(numSocParts)+"_n"+str(numBatParts)+"_"+scenario+".csv","w") 
-        start = time.time()
-        lb,obj,gap,iters,frac_over,sol_ub = RunPH(scenario,num_days=365,probSize=24,
-                itermax=1000,tol=0.25,n=500,ubCheck=1,
-                tech_filename = tech_filename,
-                max_filename = max_filename,
-                pv_spec_filename = pv_spec_filename,
-                lbFind=1, numSocParts=numSocParts, numBatParts=numBatParts, MINLP=False,nonuniform_part=False,
-                findgen=True, timeLimit=900, solsToCheck=5, method=method
-                )
-        #
-        elapsed = (time.time() - start) #measure time elapsed in minutes
-        outfile.write("Scenario,LB,UB,gap,iters,time,fracOverLim\n")
-        outfile.write(scenario+","+str(lb)+","+str(obj)+","+str(gap)+","+str(iters)+","+str(elapsed)+","+str(frac_over)+","+"\n")
-        print("\n\nTerminated. Results:")
-        print("method: ",method)
-        print("scenario: ",scenario)
-        print("lb: ",lb)
-        print("obj: ",obj)
-        print("gap: ",gap)
-        print("total time:",elapsed)
-        print("\n\n\n")
+    outfile = open("results_method-"+method+"_m"+str(numSocParts)+"_n"+str(numBatParts)+"_"+scenario+".csv","w") 
+    start = time.time()
+    lb,obj,gap,iters,frac_over = RunPH(scenario,num_days=365,probSize=24,
+            itermax=1000,tol=0.05,n=500,ubCheck=1,
+            tech_filename = tech_filename,
+            max_filename = max_filename,
+            pv_spec_filename = pv_spec_filename,
+            lbFind=1, numSocParts=numSocParts, numBatParts=numBatParts, MINLP=False,nonuniform_part=False,
+            findgen=True, timeLimit=900, solsToCheck=5, method=method
+            )
+    #
+    elapsed = (time.time() - start) #measure time elapsed in minutes
+    outfile.write("Scenario,LB,UB,gap,iters,time,fracOverLim\n")
+    outfile.write(scenario+","+str(lb)+","+str(obj)+","+str(gap)+","+str(iters)+","+str(elapsed)+","+str(frac_over)+","+"\n")
+    print("\n\nTerminated. Results:")
+    print("method: ",method)
+    print("scenario: ",scenario)
+    print("lb: ",lb)
+    print("obj: ",obj)
+    print("gap: ",gap)
+    print("total time:",elapsed)
+    print("\n\n\n")
     
    
