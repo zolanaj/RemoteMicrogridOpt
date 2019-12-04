@@ -40,16 +40,16 @@ in which:
 - **minlp_flag** solves the MINLP nonlinear model to within the optimality criterion if the argument is **minlp**, and solves the MILP approximation otherwise.
 - **mingen_flag** does not use a mincap generator valid inequality if the argument is equal to **none** and uses it otherwise
 
-Keywords for **model** are as follows:
+Keywords for **model** are as follows (see the paper for model descriptions):
 
-========================
-keyword  | Model
-========================
-univariate | Univariate implementation of Model (U)
-bivariate | Bivariate implementation of Model (U)
-gounaris | Univariate implementation of Model (G)
-nagarajan | Bivariate implementation of Model (N)
-========================
+
+|keyword  | Model |
+| -------- | ----- | 
+| univariate | Univariate implementation of Model (U) |
+| bivariate | Bivariate implementation of Model (U) |
+| gounaris | Univariate implementation of Model (G) |
+| nagarajan | Bivariate implementation of Model (N) |
+| -------- | ----- | 
 
 Example: ```python RunPH.py ll12 1 4 univariate minlp```
 
