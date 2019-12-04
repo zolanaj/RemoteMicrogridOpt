@@ -507,12 +507,24 @@ if __name__ == "__main__":
         method = "univariate"
     if len(sys.argv) > 5: 
         if sys.argv[5] == 'minlp':
-            MINLP = True
+            minlp_flag = True
+            print ("MINLP model wil be solved.")
         else: 
             print ("argument for MINLP solve not recognized; solving MILP only.")
-            MINLP = False
+            minlp_flag = False
     else: 
         print ("no argument provided for MINLP solve; solving MILP only.")
+        minlp_flag = False
+    if len(sys.argv) > 6: 
+        if sys.argv[5] == 'none':
+            mingen_flag = False
+            print ("No VI will be generated to establish a minimum generator capacity.")
+        else: 
+            print ("argument for minimum generator capacity VI not recognized; default will implement the VI.")
+            mingen_flag = True
+    else: 
+        print ("no argument provided for minimum generator capacity VI; default will implement the VI.")
+        mingen_flag = True
     print ("scenario:",scenario)
     tech_filename = "./../inputs/Opt_Model_J_inputs.csv"
     max_filename = "./../inputs/Opt_Model_J_MAX.csv"
@@ -524,8 +536,8 @@ if __name__ == "__main__":
             tech_filename = tech_filename,
             max_filename = max_filename,
             pv_spec_filename = pv_spec_filename,
-            lbFind=1, numSocParts=numSocParts, numBatParts=numBatParts, MINLP=MINLP,nonuniform_part=False,
-            findgen=True, timeLimit=3600, solsToCheck=5, method=method
+            lbFind=1, numSocParts=numSocParts, numBatParts=numBatParts, MINLP=minlp_flag,nonuniform_part=False,
+            findgen=mingen_flag, timeLimit=3600, solsToCheck=5, method=method
             )
     #
     elapsed = (time.time() - start) #measure time elapsed in minutes
