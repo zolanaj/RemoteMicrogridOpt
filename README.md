@@ -23,9 +23,9 @@ There are three folders within this repository:
 
 ## General use of the model
 
-Due to the limits of the multiprocessing library in interactive Python as of the time of this publication, it is best to run the scripts in Python 2 from the command line.  The module to run to obtain meaningful results is RunPH.py, and after navigating to the directory **path_to_repository/RemoteMicrogridOpt/python**, an example command takes the form 
+Due to the limits of the multiprocessing library in interactive Python as of the time of this publication, it is best to run the scripts in Python 2 from the command line.  The module to run to obtain meaningful results is RunPH.py, and after navigating to the directory ```path_to_repository/RemoteMicrogridOpt/python``` an example command takes the form 
 
-**python RunPH.py scen m n model minlp_flag**
+```python RunPH.py scen m n model minlp_flag```
 
 in which: 
 
@@ -34,7 +34,7 @@ in which:
 - **n** is a positive integer that denotes the number of partitions on battery current; 
 - **model** denotes the partitioning model to solve. 
 - **minlp_flag** solves the MINLP nonlinear model to within the optimality criterion if the argument is **minlp**, and solves the MILP approximation otherwise.
-
+- **mingen_flag** does not use a mincap generator valid inequality if the argument is equal to **none** and uses it otherwise
 
 Keywords for **model** are as follows:
 
@@ -47,30 +47,27 @@ gounaris | Univariate implementation of Model (G)
 nagarajan | Bivariate implementation of Model (N)
 ========================
 
-Example: **python RunPH.py ll12 1 4 univariate minlp**
+Example: ```python RunPH.py ll12 1 4 univariate minlp```
 
 ## Replicating analyses from the paper
 
-Using the section on general use of the model above as a guide, the results and figures from the above may be obtained in the following way.
+Using the section on general use of the model above as a guide, the results and figures from the above may be obtained using the arguments below.  The outputs for each case are a results file with some basic outputs on the model, and an iteration file that records lower and upper bounds on the optimal objective value of a model instance as new bounds are obtained.  The former may be used to build all the tables, while the latter is useful in developing figures 6 and 7 from the paper.
 
 ### Table 1, Algorithm 1
-Column (U): Let **m=1, n=1, model=univariate, minlp_flag=n** for all **scen** from **ll1** to **ll14**
-Column "Solve Directly": instead of the command above, use the command: **python Partition_Univariate.py scen**, for all **scen** from **ll1** to **ll14**
+Column For Algorithm 1: Let **m=1, n=1, model=univariate, minlp_flag=n, mingen_flag=y** for all **scen** from **ll1** to **ll14**
+Column "Solve Directly": instead of the command above, use the command: ```python Partition_Univariate.py scen```, for all **scen** from **ll1** to **ll14**
 
 ### Table 2
-Column (U): Let **m=1, n=4, model=univariate, minlp_flag=n** for all **scen** from **ll1** to **ll14**
-Column (G): Let **m=1, n=4, model=gounaris, minlp_flag=n** for all **scen** from **ll1** to **ll14**
-Column (N): Let **m=1, n=4, model=nagarajan, minlp_flag=n** for all **scen** from **ll1** to **ll14**
+Column (U): Let **m=1, n=4, model=univariate, minlp_flag=n, mingen_flag=y** for all **scen** from **ll1** to **ll14**
+Column (G): Let **m=1, n=4, model=gounaris, minlp_flag=n, mingen_flag=y** for all **scen** from **ll1** to **ll14**
+Column (N): Let **m=1, n=4, model=nagarajan, minlp_flag=n, mingen_flag=y** for all **scen** from **ll1** to **ll14**
 
 ### Table 3
-Let **m=1, n=4, model=univariate, minlp_flag=minlp** for all **scen** from **ll1** to **ll14**
+Let **m=1, n=4, model=univariate, minlp_flag=minlp, mingen_flag=y** for all **scen** from **ll1** to **ll14**
 
 ### Figures 6 and 7
-Let **m,n** correspond to each instance in the table, **model=univariate** if **n=1** and **model=bivariate** otherwise, for all **scen** from **ll1** to **ll14**
-Figure 6 compares 
+Let **m,n** correspond to each instance in the table, **model=univariate, minlp_flag=minlp, mingen_flag=y** if **n=1** and **model=bivariate** otherwise, for all **scen** from **ll1** to **ll14**
 
-### Table 1
-Let **m=1, n=4, model=univariate** for all **scen** from **ll1** to **ll14**
-
-### Figure 2
-Let **m=1, n=4, model=univariate** for all **scen** from **ll1** to **ll14**
+### Table 4
+First Column: Let **m=1, n=4, model=univariate, minlp_flag=minlp, mingen_flag=none** for all **scen** from **ll1** to **ll14**
+Second Column: Let **m=1, n=4, model=univariate, minlp_flag=minlp, mingen_flag=y** for all **scen** from **ll1** to **ll14**
