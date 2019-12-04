@@ -49,8 +49,28 @@ nagarajan | Bivariate implementation of Model (N)
 
 Example: **python RunPH.py ll12 1 4 univariate minlp**
 
-## Replicating analysese from the paper
+## Replicating analyses from the paper
 
 Using the section on general use of the model above as a guide, the results and figures from the above may be obtained in the following way.
 
-###
+### Table 1, Algorithm 1
+Column (U): Let **m=1, n=1, model=univariate, minlp_flag=n** for all **scen** from **ll1** to **ll14**
+Column "Solve Directly": instead of the command above, use the command: **python Partition_Univariate.py scen**, for all **scen** from **ll1** to **ll14**
+
+### Table 2
+Column (U): Let **m=1, n=4, model=univariate, minlp_flag=n** for all **scen** from **ll1** to **ll14**
+Column (G): Let **m=1, n=4, model=gounaris, minlp_flag=n** for all **scen** from **ll1** to **ll14**
+Column (N): Let **m=1, n=4, model=nagarajan, minlp_flag=n** for all **scen** from **ll1** to **ll14**
+
+### Table 3
+Let **m=1, n=4, model=univariate, minlp_flag=minlp** for all **scen** from **ll1** to **ll14**
+
+### Figures 6 and 7
+Let **m,n** correspond to each instance in the table, **model=univariate** if **n=1** and **model=bivariate** otherwise, for all **scen** from **ll1** to **ll14**
+Figure 6 compares 
+
+### Table 1
+Let **m=1, n=4, model=univariate** for all **scen** from **ll1** to **ll14**
+
+### Figure 2
+Let **m=1, n=4, model=univariate** for all **scen** from **ll1** to **ll14**
