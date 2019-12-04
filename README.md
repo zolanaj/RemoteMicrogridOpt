@@ -49,7 +49,7 @@ Keywords for **model** are as follows (see the paper for model descriptions):
 | bivariate | Bivariate implementation of Model (U) |
 | gounaris | Univariate implementation of Model (G) |
 | nagarajan | Bivariate implementation of Model (N) |
-| -------- | ----- | 
+
 
 Example: ```python RunPH.py ll12 1 4 univariate minlp```
 
