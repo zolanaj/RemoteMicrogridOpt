@@ -2111,12 +2111,12 @@ if __name__ == "__main__":
     #    print "SCEN:",scenario,"LB:",lb,"TIME:",elapsed
     #f.close()
     
-    #Solve whole problem
-    lb,obj = RunLinearLBDay(scenario, lambs=[0.0],num_days=1, probSize=24,
-        batPartsPlus=[0,0.25,0.5,0.75,1.0],batPartsMinus=[0,0.25,0.5,0.75,1.0],
-        design_mults=[(0,0)]*1,amortize_on_demand = True, IFS=None, mincap=0,
-        reslim=60)
-    print (scenario)
+    #Solve whole problem, model (M)
+    lb,obj = RunLinearLBDay(scenario, lambs=[0.0],num_days=1, probSize=8760,
+        batPartsPlus=[0.0,1.0],batPartsMinus=[0.0,1.0],
+        design_mults=[(0,0)]*1,amortize_on_demand = False, IFS=None, mincap=0,
+        reslim=1800)
+    print (scenario, lb, obj)
     
     #print "SUBGRADIENT ATTEMPT"
     #lb,obj,gap,iters = RunLBSubgradient(scenario,num_days=365,probSize=24,itermax=30,tol=0.05,n=3,ubCheck=5)

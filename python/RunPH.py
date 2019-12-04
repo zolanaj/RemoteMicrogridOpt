@@ -512,7 +512,7 @@ if __name__ == "__main__":
             print ("argument for MINLP solve not recognized; solving MILP only.")
             MINLP = False
     else: 
-        print ("no argumemt provided for MINLP solve; solving MILP only.")
+        print ("no argument provided for MINLP solve; solving MILP only.")
     print ("scenario:",scenario)
     tech_filename = "./../inputs/Opt_Model_J_inputs.csv"
     max_filename = "./../inputs/Opt_Model_J_MAX.csv"
@@ -524,8 +524,8 @@ if __name__ == "__main__":
             tech_filename = tech_filename,
             max_filename = max_filename,
             pv_spec_filename = pv_spec_filename,
-            lbFind=1, numSocParts=numSocParts, numBatParts=numBatParts, MINLP=False,nonuniform_part=False,
-            findgen=True, timeLimit=900, solsToCheck=5, method=method
+            lbFind=1, numSocParts=numSocParts, numBatParts=numBatParts, MINLP=MINLP,nonuniform_part=False,
+            findgen=True, timeLimit=3600, solsToCheck=5, method=method
             )
     #
     elapsed = (time.time() - start) #measure time elapsed in minutes
