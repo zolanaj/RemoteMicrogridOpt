@@ -516,7 +516,7 @@ if __name__ == "__main__":
         print ("no argument provided for MINLP solve; solving MILP only.")
         minlp_flag = False
     if len(sys.argv) > 6: 
-        if sys.argv[5] == 'none':
+        if sys.argv[6] == 'none':
             mingen_flag = False
             print ("No VI will be generated to establish a minimum generator capacity.")
         else: 
@@ -525,7 +525,7 @@ if __name__ == "__main__":
     else: 
         print ("no argument provided for minimum generator capacity VI; default will implement the VI.")
         mingen_flag = True
-    print ("scenario:",scenario)
+        
     tech_filename = "./../inputs/Opt_Model_J_inputs.csv"
     max_filename = "./../inputs/Opt_Model_J_MAX.csv"
     pv_spec_filename = "./../inputs/Opt_Model_PV_Inputs.csv"
@@ -551,5 +551,6 @@ if __name__ == "__main__":
     print("gap: ",gap)
     print("total time:",elapsed)
     print("\n\n\n")
+    
     
    
