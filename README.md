@@ -4,7 +4,7 @@
 This is a public repository containing the python code and working files in support of the following paper:
 Zolan, A., Scioletti, M., Morton, D., and Newman, A., Decomposing Mixed-integer Programs for Optimal Microgrid Design (2019).  INFORMS Journal on Computing, accepted.
 
-A link to the paper will be included as soon as a first look of the paper is available.  For now, if you want to use the paper and these models for reserach or analysis, please use the citation above.  If you want to use the data contained in the case studies, please use the following citation: 
+A link to the paper will be included as soon as a first look of the paper is available.  For now, if you want to use the paper and these models for research or analysis, please use the citation above.  If you want to use the data contained in the case studies, please use the following citation: 
 
 M. Engels, P. A. Boyd, T. M. Koehler, S. Goel, D. R. Sisk, D. D. Hatley, V. V. Mendon, and J. C. Hail. Smart and Green Energy (SAGE) for base camps final report. Technical report, Pacific Northwest National Laboratory (PNNL), Richland, WA (US), 2014
 
