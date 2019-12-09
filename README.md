@@ -29,7 +29,7 @@ There are three folders within this repository:
 
 Due to the limits of the multiprocessing library in interactive Python as of the time of this publication, it is best to run the scripts in Python 2 from the command line.  The module to run to obtain meaningful results is RunPH.py, and after navigating to the directory ```path_to_repository/RemoteMicrogridOpt/python``` an example command takes the form 
 
-```python RunPH.py scen m n model minlp_flag```
+```python RunPH.py scen m n model minlp_flag mingen_flag```
 
 in which: 
 
