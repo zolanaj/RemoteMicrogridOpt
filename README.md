@@ -58,20 +58,20 @@ Example: ```python RunPH.py ll12 1 4 univariate minlp```
 Using the section on general use of the model above as a guide, the results and figures from the above may be obtained using the arguments below.  The outputs for each case are a results file with some basic outputs on the model, and an iteration file that records lower and upper bounds on the optimal objective value of a model instance as new bounds are obtained.  The former may be used to build all the tables, while the latter is useful in developing figures 6 and 7 from the paper.
 
 ### Table 1, Algorithm 1
-Column For Algorithm 1: Let **m=1, n=1, model=univariate, minlp_flag=n, mingen_flag=y** for all **scen** from **ll1** to **ll14**
-Column "Solve Directly": instead of the command above, use the command: ```python Partition_Univariate.py scen```, for all **scen** from **ll1** to **ll14**
+ - Column For Algorithm 1: Let **m=1, n=1, model=univariate, minlp_flag=n, mingen_flag=y** for all **scen** from **ll1** to **ll14**
+ - Column "Solve Directly": instead of the command above, use the command: ```python Partition_Univariate.py scen```, for all **scen** from **ll1** to **ll14**
 
 ### Table 2
-Column (U): Let **m=1, n=4, model=univariate, minlp_flag=n, mingen_flag=y** for all **scen** from **ll1** to **ll14**
-Column (G): Let **m=1, n=4, model=gounaris, minlp_flag=n, mingen_flag=y** for all **scen** from **ll1** to **ll14**
-Column (N): Let **m=1, n=4, model=nagarajan, minlp_flag=n, mingen_flag=y** for all **scen** from **ll1** to **ll14**
+ - Column (U): Let **m=1, n=4, model=univariate, minlp_flag=n, mingen_flag=y** for all **scen** from **ll1** to **ll14**
+ - Column (G): Let **m=1, n=4, model=gounaris, minlp_flag=n, mingen_flag=y** for all **scen** from **ll1** to **ll14**
+ - Column (N): Let **m=1, n=4, model=nagarajan, minlp_flag=n, mingen_flag=y** for all **scen** from **ll1** to **ll14**
 
 ### Table 3
-Let **m=1, n=4, model=univariate, minlp_flag=minlp, mingen_flag=y** for all **scen** from **ll1** to **ll14**
+ - Let **m=1, n=4, model=univariate, minlp_flag=minlp, mingen_flag=y** for all **scen** from **ll1** to **ll14**
 
 ### Figures 6 and 7
-Let **m,n** correspond to each instance in the table, **model=univariate, minlp_flag=minlp, mingen_flag=y** if **n=1** and **model=bivariate** otherwise, for all **scen** from **ll1** to **ll14**
+ - Let **m,n** correspond to each instance in the table, **model=univariate, minlp_flag=minlp, mingen_flag=y** if **n=1** and **model=bivariate** otherwise, for all **scen** from **ll1** to **ll14**
 
 ### Table 4
-First Column: Let **m=1, n=4, model=univariate, minlp_flag=minlp, mingen_flag=none** for all **scen** from **ll1** to **ll14**
-Second Column: Let **m=1, n=4, model=univariate, minlp_flag=minlp, mingen_flag=y** for all **scen** from **ll1** to **ll14**
+ - First Column: Let **m=1, n=4, model=univariate, minlp_flag=minlp, mingen_flag=none** for all **scen** from **ll1** to **ll14**
+ - Second Column: Let **m=1, n=4, model=univariate, minlp_flag=minlp, mingen_flag=y** for all **scen** from **ll1** to **ll14**
